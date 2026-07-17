@@ -133,10 +133,35 @@
     color: var(--accent);
   }
 
-  /* ---- 全体トグル (軌道・名前) ---- */
-  #masterToggles {
+  /* ---- 天体リストパネル (軌道/名前 + リストを囲う半透明の角丸板) ---- */
+  #navPanel {
     position: absolute;
-    top: 86px; left: 16px;
+    top: 76px; left: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    padding: 4px 8px 8px;
+    max-height: calc(100vh - 170px);
+    overflow-y: auto;
+    scrollbar-width: thin;
+    transition: transform 0.25s ease;
+  }
+  #app.navHidden #navPanel {
+    transform: translateX(calc(-100% - 24px));
+    pointer-events: none;
+  }
+  #navCollapse {
+    align-self: stretch;
+    text-align: right;
+    padding: 2px 6px;
+    font-size: 12px;
+    line-height: 1.2;
+    color: var(--dim);
+    background: none;
+    border: none;
+  }
+  #navCollapse:hover { color: var(--text); background: rgba(150, 178, 224, 0.12); }
+  #masterToggles {
     display: flex;
     gap: 4px;
   }
@@ -146,11 +171,23 @@
     letter-spacing: 0.1em;
     background: rgba(9, 14, 28, 0.6);
   }
+  #navExpand {
+    position: absolute;
+    top: 76px; left: 0;
+    padding: 5px 8px 5px 5px;
+    font-size: 11px;
+    color: var(--dim);
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-left: none;
+    border-radius: 0 4px 4px 0;
+    display: none;
+  }
+  #navExpand:hover { color: var(--text); }
+  #app.navHidden #navExpand { display: block; }
 
   /* ---- body nav ---- */
   #nav {
-    position: absolute;
-    top: 122px; left: 16px;
     display: flex;
     flex-direction: column;
     gap: 4px;
@@ -175,7 +212,6 @@
   }
   #nav .tgl.on { color: var(--accent); border-color: var(--accent-dim); }
   #nav .div { height: 1px; margin: 5px 2px 3px; background: var(--line); }
-  #app.navHidden #nav, #app.navHidden #masterToggles { display: none; }
 
   /* ---- date readout ---- */
   #clock {
@@ -308,7 +344,7 @@
   }
   #info.open { opacity: 1; pointer-events: auto; transform: translateY(-50%); }
   @media (prefers-reduced-motion: reduce) {
-    #info { transition: none; }
+    #info, #navPanel { transition: none; }
   }
   #info .eyebrow {
     font-size: 10px;
@@ -412,9 +448,10 @@
     #info.open { transform: none; }
     #hint { display: none; }
     #menu { top: 60px; }
-    #masterToggles { top: 60px; }
+    #navPanel { top: 60px; max-height: calc(100vh - 200px); }
     #masterToggles button { padding: 3px 9px; font-size: 10px; }
-    #nav { top: 92px; gap: 3px; }
+    #navExpand { top: 60px; }
+    #nav { gap: 3px; }
     #nav button { padding: 4px 9px; font-size: 10px; }
     #controls { gap: 8px; padding: 8px 10px; }
     #controls .sep { display: none; }
@@ -434,19 +471,21 @@
   </header>
 
   <div id="menu" class="hud" role="menu">
-    <button id="menuNav" role="menuitem"></button>
     <button id="menuLang" role="menuitem"></button>
     <button id="menuAbout" role="menuitem"></button>
   </div>
 
   <aside id="about" class="hud" aria-modal="true"></aside>
 
-  <div id="masterToggles">
-    <button id="orbitsBtn" class="on">軌道</button>
-    <button id="labelsBtn" class="on">名前</button>
+  <div id="navPanel" class="hud">
+    <button id="navCollapse" aria-label="リストを隠す">«</button>
+    <div id="masterToggles">
+      <button id="orbitsBtn" class="on">軌道</button>
+      <button id="labelsBtn" class="on">名前</button>
+    </div>
+    <nav id="nav" aria-label="天体を選択"></nav>
   </div>
-
-  <nav id="nav" aria-label="天体を選択"></nav>
+  <button id="navExpand" aria-label="リストを表示">»</button>
 
   <div id="clock" class="hud">
     <div class="dtrow">
@@ -2243,22 +2282,21 @@
   // ---------- ハンバーガーメニュー & ライセンス表示 ----------
   const menuBtn = document.getElementById("menuBtn");
   const menuEl = document.getElementById("menu");
-  const menuNavBtn = document.getElementById("menuNav");
   const menuLangBtn = document.getElementById("menuLang");
   const menuAboutBtn = document.getElementById("menuAbout");
   const aboutEl = document.getElementById("about");
 
-  // 天体リストの表示/非表示 (モバイルは初期非表示)
+  // 天体リストの表示/非表示 (« で左へ引っ込み、左端の » で出てくる。モバイルは初期非表示)
   let navVisible = !window.matchMedia("(max-width: 720px)").matches;
+  const navCollapseBtn = document.getElementById("navCollapse");
+  const navExpandBtn = document.getElementById("navExpand");
   function applyNavVisible() {
     document.getElementById("app").classList.toggle("navHidden", !navVisible);
-    menuNavBtn.textContent = navVisible ? T().menuNavHide : T().menuNavShow;
+    navCollapseBtn.title = T().menuNavHide;
+    navExpandBtn.title = T().menuNavShow;
   }
-  menuNavBtn.addEventListener("click", () => {
-    navVisible = !navVisible;
-    applyNavVisible();
-    setMenu(false);
-  });
+  navCollapseBtn.addEventListener("click", () => { navVisible = false; applyNavVisible(); });
+  navExpandBtn.addEventListener("click", () => { navVisible = true; applyNavVisible(); });
 
   function setMenu(open) {
     menuEl.classList.toggle("open", open);
