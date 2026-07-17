@@ -2001,13 +2001,14 @@
   document.getElementById("viewSideBtn").addEventListener("click", () => setPitch(0.02));  // 真横
 
   // デフォルト: 太陽中心に内惑星 (火星軌道まで) がちょうど収まる俯瞰
-  document.getElementById("viewDefBtn").addEventListener("click", () => {
+  function goDefaultView() {
     select(null, false);
     cam.focusTgt[0] = 0; cam.focusTgt[1] = 0; cam.focusTgt[2] = 0;
     const R = 19;                                  // 火星軌道 (遠日点) + 余白 [world]
     cam.distTgt = R / (Math.tan(FOV / 2) * Math.min(1, W / H)) * 1.15;
     setPitch(0.35);
-  });
+  }
+  document.getElementById("viewDefBtn").addEventListener("click", goDefaultView);
 
   document.getElementById("resetBtn").addEventListener("click", () => {
     select(null, false);
@@ -2140,6 +2141,9 @@
   // ---------- 起動 ----------
   updatePositions();
   applyLang();
+  // 初期カメラは「デフォルト」ビュー (内惑星が収まる俯瞰) に即時セット
+  goDefaultView();
+  cam.dist = cam.distTgt;
   requestAnimationFrame(frame);
 })();
 </script>
