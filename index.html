@@ -173,6 +173,7 @@
   }
   #nav .tgl.on { color: var(--accent); border-color: var(--accent-dim); }
   #nav .div { height: 1px; margin: 5px 2px 3px; background: var(--line); }
+  #app.navHidden #nav, #app.navHidden #masterToggles { display: none; }
 
   /* ---- date readout ---- */
   #clock {
@@ -431,6 +432,7 @@
   </header>
 
   <div id="menu" class="hud" role="menu">
+    <button id="menuNav" role="menuitem"></button>
     <button id="menuLang" role="menuitem"></button>
     <button id="menuAbout" role="menuitem"></button>
   </div>
@@ -660,6 +662,8 @@
       u: { yr: " 年", d: " 日", h: " 時間", min: " 分", s: " 秒" },
       menuLang: "English",
       menuAbout: "ライセンス・クレジット",
+      menuNavHide: "天体リストを隠す",
+      menuNavShow: "天体リストを表示",
     },
     en: {
       title: "Orbitarium — Solar System Simulator",
@@ -673,6 +677,8 @@
       u: { yr: " yr", d: " days", h: " hr", min: " min", s: " sec" },
       menuLang: "日本語",
       menuAbout: "License & Credits",
+      menuNavHide: "Hide body list",
+      menuNavShow: "Show body list",
     },
   };
   const T = () => UI[lang];
@@ -2027,9 +2033,22 @@
   // ---------- ハンバーガーメニュー & ライセンス表示 ----------
   const menuBtn = document.getElementById("menuBtn");
   const menuEl = document.getElementById("menu");
+  const menuNavBtn = document.getElementById("menuNav");
   const menuLangBtn = document.getElementById("menuLang");
   const menuAboutBtn = document.getElementById("menuAbout");
   const aboutEl = document.getElementById("about");
+
+  // 天体リストの表示/非表示 (モバイルは初期非表示)
+  let navVisible = !window.matchMedia("(max-width: 720px)").matches;
+  function applyNavVisible() {
+    document.getElementById("app").classList.toggle("navHidden", !navVisible);
+    menuNavBtn.textContent = navVisible ? T().menuNavHide : T().menuNavShow;
+  }
+  menuNavBtn.addEventListener("click", () => {
+    navVisible = !navVisible;
+    applyNavVisible();
+    setMenu(false);
+  });
 
   function setMenu(open) {
     menuEl.classList.toggle("open", open);
@@ -2110,6 +2129,7 @@
     document.getElementById("nowBtn").textContent = t.nowBtn;
     menuLangBtn.textContent = t.menuLang;
     menuAboutBtn.textContent = t.menuAbout;
+    applyNavVisible();
     for (const el of navEl.querySelectorAll("button.body")) {
       const b = BODY_BY_KEY.get(el.dataset.key);
       if (b) el.textContent = bName(b);
