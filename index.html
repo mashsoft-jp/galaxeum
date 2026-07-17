@@ -577,7 +577,7 @@
   };
 
   const MOON = {
-    key:"moon", name:"月", en:"MOON", type:1, tilt:6.7, rot:27.32, rkm:1737,
+    key:"moon", name:"月", en:"MOON", type:1, tilt:6.7, rot:27.322, rkm:1737,
     colA:[0.72,0.71,0.69], colB:[0.5,0.5,0.5], colC:[0,0,0], rim:[0,0,0], params:[0,0,0,0],
     rows:[["直径","3,475 km"],["質量","7.35×10²² kg"],["地球からの距離","38.4万 km"],["公転周期","27.3 日"],["自転周期","27.3 日 (同期)"],["平均温度","−23 ℃"]],
     fact:"地球の唯一の衛星。自転と公転が同期しているため、地球からは常に同じ面だけが見えます。"
@@ -588,7 +588,9 @@
   //   parent 母天体 aKm 軌道半径[km] T 公転周期[日] retro 逆行
   //   軌道面は母惑星の赤道面 (月のみ黄道基準)。自転は全て潮汐固定
   // ============================================================
-  Object.assign(MOON, { parent:"earth", aKm:384400, T:27.322, plane:"ecliptic" });
+  //   ph: 公転位相 (2000-01-06 18:14 UTC の新月で校正)
+  //   spin0: 自転位相 (表側 = テクスチャ経度0° が常に地球を向くよう校正)
+  Object.assign(MOON, { parent:"earth", aKm:384400, T:27.322, plane:"ecliptic", ph:2.506, spin0:0.6354 });
   const SATELLITES = [
     MOON,
     { key:"phobos", name:"フォボス", en:"PHOBOS", parent:"mars", aKm:9376, T:0.3189, rkm:11, tilt:0, rot:0.3189, type:1, ph:0.7,
