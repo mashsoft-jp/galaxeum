@@ -829,37 +829,64 @@
   }
 
   // ---------- 最小 mat4 (列優先) ----------
-  function mIdent() { return new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]); }
-  function mMul(a, b) {
-    const o = new Float32Array(16);
+  //   out を渡すとその配列に書き込んで返す (毎フレームのアロケーション回避)。
+  //   mMul の out は a・b と別の配列であること。
+  function mIdent(out) {
+    const o = out || new Float32Array(16);
+    o.fill(0); o[0] = o[5] = o[10] = o[15] = 1;
+    return o;
+  }
+  function mMul(a, b, out) {
+    const o = out || new Float32Array(16);
     for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) {
       o[c*4+r] = a[r]*b[c*4] + a[4+r]*b[c*4+1] + a[8+r]*b[c*4+2] + a[12+r]*b[c*4+3];
     }
     return o;
   }
-  function mPersp(fovy, aspect, near, far) {
+  function mPersp(fovy, aspect, near, far, out) {
     const f = 1 / Math.tan(fovy / 2), nf = 1 / (near - far);
-    const o = new Float32Array(16);
+    const o = out || new Float32Array(16);
+    o.fill(0);
     o[0] = f / aspect; o[5] = f; o[10] = (far + near) * nf; o[11] = -1; o[14] = 2 * far * near * nf;
     return o;
   }
-  function mLookAt(eye, tgt, up) {
+  function mLookAt(eye, tgt, up, out) {
+    const o = out || new Float32Array(16);
     let zx = eye[0]-tgt[0], zy = eye[1]-tgt[1], zz = eye[2]-tgt[2];
     let l = Math.hypot(zx,zy,zz); zx/=l; zy/=l; zz/=l;
     let xx = up[1]*zz - up[2]*zy, xy = up[2]*zx - up[0]*zz, xz = up[0]*zy - up[1]*zx;
     l = Math.hypot(xx,xy,xz) || 1; xx/=l; xy/=l; xz/=l;
     const yx = zy*xz - zz*xy, yy = zz*xx - zx*xz, yz = zx*xy - zy*xx;
-    return new Float32Array([
-      xx, yx, zx, 0,  xy, yy, zy, 0,  xz, yz, zz, 0,
-      -(xx*eye[0]+xy*eye[1]+xz*eye[2]), -(yx*eye[0]+yy*eye[1]+yz*eye[2]), -(zx*eye[0]+zy*eye[1]+zz*eye[2]), 1,
-    ]);
+    o[0]=xx; o[1]=yx; o[2]=zx; o[3]=0;
+    o[4]=xy; o[5]=yy; o[6]=zy; o[7]=0;
+    o[8]=xz; o[9]=yz; o[10]=zz; o[11]=0;
+    o[12] = -(xx*eye[0]+xy*eye[1]+xz*eye[2]);
+    o[13] = -(yx*eye[0]+yy*eye[1]+yz*eye[2]);
+    o[14] = -(zx*eye[0]+zy*eye[1]+zz*eye[2]);
+    o[15] = 1;
+    return o;
   }
-  function mRotX(a) { const c=Math.cos(a), s=Math.sin(a); return new Float32Array([1,0,0,0, 0,c,s,0, 0,-s,c,0, 0,0,0,1]); }
-  function mRotY(a) { const c=Math.cos(a), s=Math.sin(a); return new Float32Array([c,0,-s,0, 0,1,0,0, s,0,c,0, 0,0,0,1]); }
-  function mTRS(t, rot, s) {
-    const o = rot ? rot.slice() : mIdent();
-    for (let i = 0; i < 12; i++) o[i] *= s;
-    o[12] = t[0]; o[13] = t[1]; o[14] = t[2];
+  function mRotX(a, out) {
+    const c=Math.cos(a), s=Math.sin(a);
+    const o = out || new Float32Array(16);
+    o.fill(0); o[0]=1; o[5]=c; o[6]=s; o[9]=-s; o[10]=c; o[15]=1;
+    return o;
+  }
+  function mRotY(a, out) {
+    const c=Math.cos(a), s=Math.sin(a);
+    const o = out || new Float32Array(16);
+    o.fill(0); o[0]=c; o[2]=-s; o[5]=1; o[8]=s; o[10]=c; o[15]=1;
+    return o;
+  }
+  function mTRS(t, rot, s, out) {
+    const o = out || new Float32Array(16);
+    if (rot) {
+      for (let i = 0; i < 12; i++) o[i] = rot[i] * s;
+    } else {
+      o.fill(0); o[0] = o[5] = o[10] = s;
+    }
+    o[3] = o[7] = o[11] = 0;
+    o[12] = t[0]; o[13] = t[1]; o[14] = t[2]; o[15] = 1;
     return o;
   }
 
@@ -1345,21 +1372,35 @@
 
   // ---------- 描画 ----------
   let VP = mIdent(), Vm = mIdent();
+  const VPW = mIdent();         // ワールド座標のままの線・点用 (VP × 平行移動)
   let EYE = [0, 0, 0];          // カメラ位置 (描画はカメラ相対座標で行う)
   const screenPos = new Map();  // key -> {x, y, r, w}
 
+  // 毎フレームの行列・ベクトルはスクラッチを使い回す (GC 停止対策)
+  const ZERO3 = [0, 0, 0], UP3 = [0, 1, 0];
+  const SCR = {
+    P: new Float32Array(16),    // 射影
+    A: new Float32Array(16),    // 汎用
+    rx: new Float32Array(16), ry: new Float32Array(16), rot: new Float32Array(16),
+    model: new Float32Array(16), mvp: new Float32Array(16),
+    t: [0, 0, 0], tgt: [0, 0, 0], negEye: [0, 0, 0],
+  };
+
   function bodyModel(b, r) {
     const spin = b.rot ? 2 * Math.PI * simDays / b.rot + (b.spin0 || 0) : 0;
-    const rot = mMul(mRotX(-(b.tilt || 0) * DEG), mRotY(spin));
+    mRotX(-(b.tilt || 0) * DEG, SCR.rx);
+    mRotY(spin, SCR.ry);
+    mMul(SCR.rx, SCR.ry, SCR.rot);
     // 平行移動はカメラ相対 (float64 で差を取ってから f32 化することで震えを防ぐ)
     const t = posW.get(b.key);
-    return mTRS([t[0] - EYE[0], t[1] - EYE[1], t[2] - EYE[2]], rot, r);
+    SCR.t[0] = t[0] - EYE[0]; SCR.t[1] = t[1] - EYE[1]; SCR.t[2] = t[2] - EYE[2];
+    return mTRS(SCR.t, SCR.rot, r, SCR.model);
   }
 
   function drawBody(b) {
     const r = bodyR(b);
     const model = bodyModel(b, r);
-    const mvp = mMul(VP, model);
+    const mvp = mMul(VP, model, SCR.mvp);
     const tx = texByKey.get(b.key);
     gl.bindTexture(gl.TEXTURE_2D, tx || noTex);
     gl.uniform1f(bodyP.u.uHasTex, tx ? 1 : 0);
@@ -1394,13 +1435,17 @@
     EYE = eye;
     // 天体が極小のためニア面もカメラ距離に追従させる (フォボス等の微小衛星まで対応)
     const near = Math.min(Math.max(cam.dist * 0.02, 2e-7), 5);
-    const P = mPersp(FOV, W / H, near, 6000);
+    const P = mPersp(FOV, W / H, near, 6000, SCR.P);
     // カメラ相対座標で描画 (大きな平行移動を f32 行列に載せない)
-    Vm = mLookAt([0, 0, 0],
-      [cam.focus[0] - eye[0], cam.focus[1] - eye[1], cam.focus[2] - eye[2]], [0, 1, 0]);
-    VP = mMul(P, Vm);
+    SCR.tgt[0] = cam.focus[0] - eye[0];
+    SCR.tgt[1] = cam.focus[1] - eye[1];
+    SCR.tgt[2] = cam.focus[2] - eye[2];
+    mLookAt(ZERO3, SCR.tgt, UP3, Vm);
+    mMul(P, Vm, VP);
     // ワールド座標のまま描く線・点 (軌道線・星屑等) 用: 誤差はサブピクセルなので許容
-    const VPW = mMul(VP, mTRS([-eye[0], -eye[1], -eye[2]], null, 1));
+    SCR.negEye[0] = -eye[0]; SCR.negEye[1] = -eye[1]; SCR.negEye[2] = -eye[2];
+    mTRS(SCR.negEye, null, 1, SCR.A);
+    mMul(VP, SCR.A, VPW);
 
     gl.clearColor(0.016, 0.023, 0.055, 1);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
@@ -1445,8 +1490,9 @@
       for (const s of SATELLITES) {
         if (!s.showOrbit) continue;
         const par = posW.get(s.parent);
-        const model = mTRS([par[0] - eye[0], par[1] - eye[1], par[2] - eye[2]], s.M, s.aKm * KM2W);
-        gl.uniformMatrix4fv(lineP.u.uVP, false, mMul(VP, model));
+        SCR.t[0] = par[0] - eye[0]; SCR.t[1] = par[1] - eye[1]; SCR.t[2] = par[2] - eye[2];
+        mTRS(SCR.t, s.M, s.aKm * KM2W, SCR.model);
+        gl.uniformMatrix4fv(lineP.u.uVP, false, mMul(VP, SCR.model, SCR.mvp));
         const sel = selected === s;
         gl.uniform4f(lineP.u.uColor, sel ? 0.95 : 0.42, sel ? 0.70 : 0.50, sel ? 0.24 : 0.63, sel ? 0.55 : 0.16);
         gl.drawArrays(gl.LINE_STRIP, 0, SAT_ORB_N + 1);
@@ -1508,9 +1554,10 @@
       for (const b of [SUN, ...PLANETS, ...SATELLITES]) {
         if (!b.showOrbit) continue;
         const t = posW.get(b.key);
-        const model = mTRS([t[0] - eye[0], t[1] - eye[1], t[2] - eye[2]],
-          mRotX(-(b.tilt || 0) * DEG), bodyR(b));
-        gl.uniformMatrix4fv(lineP.u.uVP, false, mMul(VP, model));
+        SCR.t[0] = t[0] - eye[0]; SCR.t[1] = t[1] - eye[1]; SCR.t[2] = t[2] - eye[2];
+        mRotX(-(b.tilt || 0) * DEG, SCR.rx);
+        mTRS(SCR.t, SCR.rx, bodyR(b), SCR.model);
+        gl.uniformMatrix4fv(lineP.u.uVP, false, mMul(VP, SCR.model, SCR.mvp));
         const sel = selected === b;
         gl.uniform4f(lineP.u.uColor, sel ? 0.95 : 0.55, sel ? 0.70 : 0.65, sel ? 0.24 : 0.85, sel ? 0.6 : 0.35);
         gl.drawArrays(gl.LINES, 0, 2);
@@ -1569,13 +1616,14 @@
       const sat = PLANETS[5];
       const r = bodyR(sat);
       const sp = posW.get(sat.key);
-      const model = mTRS([sp[0] - eye[0], sp[1] - eye[1], sp[2] - eye[2]],
-        mRotX(-sat.tilt * DEG), r);
+      SCR.t[0] = sp[0] - eye[0]; SCR.t[1] = sp[1] - eye[1]; SCR.t[2] = sp[2] - eye[2];
+      mRotX(-sat.tilt * DEG, SCR.rx);
+      const model = mTRS(SCR.t, SCR.rx, r, SCR.model);
       gl.enable(gl.BLEND);
       gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
       gl.depthMask(false);
       gl.useProgram(ringP.pr);
-      gl.uniformMatrix4fv(ringP.u.uMVP, false, mMul(VP, model));
+      gl.uniformMatrix4fv(ringP.u.uMVP, false, mMul(VP, model, SCR.mvp));
       gl.uniformMatrix4fv(ringP.u.uModel, false, model);
       const tl = -sat.tilt * DEG;
       gl.uniform3f(ringP.u.uAxis, 0, Math.cos(tl), Math.sin(tl));
@@ -1674,16 +1722,32 @@
     }
     return tzVal;
   }
+  // DOM への書き込みは値が変わった時だけ行う (毎フレームのレイアウト誘発を防ぐ)
+  let lastDateStr = "", lastTimeStr = "", lastTzStr = "", lastRateStr = "";
   function updateClock() {
     const d = new Date(J2000 + simDays * DAY_MS);
+    const ds = String(d.getFullYear()).padStart(4, "0") +
+      "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate());
     // 編集中は上書きしない
-    if (document.activeElement !== dateInput) {
-      dateInput.value = String(d.getFullYear()).padStart(4, "0") +
-        "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate());
+    if (document.activeElement !== dateInput && ds !== lastDateStr) {
+      dateInput.value = ds;
+      lastDateStr = ds;
     }
-    timeText.textContent = pad2(d.getHours()) + ":" + pad2(d.getMinutes());
-    tzText.textContent = tzAbbr(d);
-    rateText.textContent = playing ? T().ratePrefix + fmtDays(daysPerSec) : T().paused;
+    const ts = pad2(d.getHours()) + ":" + pad2(d.getMinutes());
+    if (ts !== lastTimeStr) {
+      timeText.textContent = ts;
+      lastTimeStr = ts;
+    }
+    const tz = tzAbbr(d);
+    if (tz !== lastTzStr) {
+      tzText.textContent = tz;
+      lastTzStr = tz;
+    }
+    const rs = playing ? T().ratePrefix + fmtDays(daysPerSec) : T().paused;
+    if (rs !== lastRateStr) {
+      rateText.textContent = rs;
+      lastRateStr = rs;
+    }
   }
   dateInput.addEventListener("change", () => {
     const v = dateInput.value;                // "YYYY-MM-DD"
