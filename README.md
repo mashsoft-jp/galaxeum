@@ -60,4 +60,6 @@
 
 ## ライセンス
 
+© 2026 [Mashsoft Inc.](https://www.mashsoft.co.jp)
+
 コードは [MIT License](LICENSE) です。埋め込みの天体画像はパブリックドメイン(米国政府著作物)であり、MIT ライセンスの対象外です。

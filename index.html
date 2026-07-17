@@ -105,6 +105,8 @@
     color: var(--dim);
   }
   #about p { margin: 6px 0; font-size: 11.5px; line-height: 1.8; }
+  #about a { color: var(--accent); text-decoration: none; }
+  #about a:hover { text-decoration: underline; }
   #about table { width: 100%; border-collapse: collapse; }
   #about td {
     padding: 4px 0;
@@ -2070,7 +2072,7 @@
       .join("");
     const c = lang === "ja" ? {
       lic: "ライセンス",
-      licBody: "© 2026 Mashsoft Inc. — コードは MIT License で公開されています。",
+      licBody: '© 2026 <a href="https://www.mashsoft.co.jp" target="_blank" rel="noopener">Mashsoft Inc.</a> — コードは MIT License で公開されています。',
       img: "画像クレジット",
       imgBody: "以下の天体の表面には、NASA / USGS のパブリックドメイン画像を使用しています。",
       proc: "太陽・土星 (環を含む)・天王星・海王星・パラス・ジュノーは、シェーダによる生成テクスチャです (実写ではありません)。",
@@ -2079,7 +2081,7 @@
       disc: "本アプリは NASA・USGS とは無関係であり、両機関による承認・推奨を意味するものではありません。",
     } : {
       lic: "License",
-      licBody: "© 2026 Mashsoft Inc. — The code is released under the MIT License.",
+      licBody: '© 2026 <a href="https://www.mashsoft.co.jp" target="_blank" rel="noopener">Mashsoft Inc.</a> — The code is released under the MIT License.',
       img: "Image credits",
       imgBody: "The surfaces of the following bodies use public-domain imagery from NASA / USGS.",
       proc: "The Sun, Saturn (incl. rings), Uranus, Neptune, Pallas and Juno use procedurally generated textures (not actual imagery).",
