@@ -473,6 +473,7 @@
 
   <div id="menu" class="hud" role="menu">
     <button id="menuLang" role="menuitem"></button>
+    <button id="menuUnit" role="menuitem"></button>
     <button id="menuAbout" role="menuitem"></button>
   </div>
 
@@ -718,6 +719,8 @@
       u: { yr: " 年", d: " 日", h: " 時間", min: " 分", s: " 秒" },
       menuLang: "English",
       menuAbout: "ライセンス・クレジット",
+      menuUnitToMi: "距離をマイル表示",
+      menuUnitToKm: "距離を km 表示",
       menuNavHide: "天体リストを隠す",
       menuNavShow: "天体リストを表示",
     },
@@ -733,6 +736,8 @@
       u: { yr: " yr", d: " days", h: " hr", min: " min", s: " sec" },
       menuLang: "日本語",
       menuAbout: "License & Credits",
+      menuUnitToMi: "Distances in miles",
+      menuUnitToKm: "Distances in km",
       menuNavHide: "Hide body list",
       menuNavShow: "Show body list",
     },
@@ -2018,7 +2023,10 @@
     }
     openInfo(body);
     if (fly) {
-      cam.distTgt = body === SUN ? bodyR(SUN) * 4.2 : bodyR(body) * 4.6;
+      // 天体から10万kmの距離へ (10万kmが天体内部になる大きな天体は半径の2.2倍)
+      cam.distTgt = body === SUN
+        ? bodyR(SUN) * 4.2
+        : Math.max(bodyR(body) * 2.2, 100000 * KM2W);
       if (body !== SUN) {
         // 太陽光の当たる側 (太陽と天体の間) へ回り込む
         const w = posW.get(body.key);
@@ -2249,11 +2257,16 @@
   const ZLOG = Math.log(ZD_MAX / ZD_MIN);
   let zoomActive = false;
   let lastZoomStr = "", lastZoomSlider = "";
+  // 距離単位 (km / マイル)。au 表示はそのまま
+  let distUnit = localStorage.getItem("ssUnit") === "mi" ? "mi" : "km";
+  const KM_PER_MI = 1.609344;
   function fmtDist(d) {
     const au = d / K_REAL;
     if (au >= 1) return au.toFixed(2) + " au";
     if (au >= 0.01) return au.toFixed(3) + " au";
-    return Math.round(au * AU_KM).toLocaleString("en-US") + " km";
+    const km = au * AU_KM;
+    if (distUnit === "mi") return Math.round(km / KM_PER_MI).toLocaleString("en-US") + " mi";
+    return Math.round(km).toLocaleString("en-US") + " km";
   }
   // スライダー右 = 接近 (ズームイン)
   function zoomFromSlider() {
@@ -2340,8 +2353,20 @@
   const menuBtn = document.getElementById("menuBtn");
   const menuEl = document.getElementById("menu");
   const menuLangBtn = document.getElementById("menuLang");
+  const menuUnitBtn = document.getElementById("menuUnit");
   const menuAboutBtn = document.getElementById("menuAbout");
   const aboutEl = document.getElementById("about");
+
+  // 距離単位の切替 (km ⇔ マイル)
+  function updateUnitLabel() {
+    menuUnitBtn.textContent = distUnit === "km" ? T().menuUnitToMi : T().menuUnitToKm;
+  }
+  menuUnitBtn.addEventListener("click", () => {
+    distUnit = distUnit === "km" ? "mi" : "km";
+    localStorage.setItem("ssUnit", distUnit);
+    updateUnitLabel();
+    setMenu(false);
+  });
 
   // 天体リストの表示/非表示 (« で左へ引っ込み、左端の » で出てくる。モバイルは初期非表示)
   let navVisible = !window.matchMedia("(max-width: 720px)").matches;
@@ -2435,6 +2460,7 @@
     document.getElementById("nowBtn").textContent = t.nowBtn;
     menuLangBtn.textContent = t.menuLang;
     menuAboutBtn.textContent = t.menuAbout;
+    updateUnitLabel();
     applyNavVisible();
     for (const el of navEl.querySelectorAll("button.body")) {
       const b = BODY_BY_KEY.get(el.dataset.key);
