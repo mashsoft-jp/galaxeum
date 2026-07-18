@@ -269,21 +269,27 @@
     color: var(--dim);
   }
 
-  /* ---- controls ---- */
+  /* ---- controls (ラベル・−・スライダー・＋・値を全行で縦に揃えるグリッド) ---- */
   #controls {
     left: 50%;
     bottom: calc(18px + env(safe-area-inset-bottom, 0px));
     transform: translateX(-50%);
-    display: flex;
+    display: grid;
+    grid-template-columns: auto auto auto minmax(110px, 200px) auto auto;
+    gap: 8px;
     align-items: center;
-    gap: 14px;
     padding: 10px 16px;
     max-width: calc(100vw - 24px);
-    flex-wrap: wrap;
-    justify-content: center;
   }
-  #controls .group { display: flex; align-items: center; gap: 8px; }
-  #controls .sep { width: 1px; height: 22px; background: var(--line); }
+  #controls .slider { text-align: right; }
+  #controls input[type="range"] { width: 100%; }
+  .camRow {
+    grid-column: 2 / -1;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
 
   button {
     font-family: var(--font-ui);
@@ -319,7 +325,6 @@
     font-family: var(--font-num);
   }
   input[type="range"] {
-    width: 150px;
     accent-color: var(--accent);
   }
   #speedVal, #zoomVal, #angleVal {
@@ -438,7 +443,6 @@
     #dateInput { font-size: 13px; }
     #timeText { font-size: 13px; }
     #nowBtn { font-size: 9px; padding: 2px 8px; margin-top: 4px; }
-    input[type="range"] { width: 92px; }
     /* 情報パネル: 操作パネルの直上に、同程度の高さで内部スクロール */
     #info {
       top: auto;
@@ -446,7 +450,7 @@
       right: 8px;
       bottom: calc(190px + env(safe-area-inset-bottom, 0px));
       width: auto;
-      max-height: 200px;
+      max-height: 160px;
       overflow-y: auto;
       scrollbar-width: thin;
       transform: translateY(8px);
@@ -459,8 +463,11 @@
     #navExpand { top: 60px; }
     #nav { gap: 3px; }
     #nav button { padding: 4px 9px; font-size: 10px; }
-    #controls { gap: 8px; padding: 8px 10px; }
-    #controls .sep { display: none; }
+    #controls {
+      gap: 6px;
+      padding: 8px 10px;
+      grid-template-columns: auto auto auto minmax(70px, 1fr) auto auto;
+    }
     button { padding: 6px 9px; font-size: 11px; }
     #play { min-width: 64px; }
   }
@@ -516,33 +523,29 @@
   <div id="hint">ドラッグで回転 ・ ホイール / ピンチでズーム ・ 天体クリックで接近</div>
 
   <footer id="controls" class="hud">
-    <div class="group">
-      <button id="play" class="primary">⏸ 停止</button>
-      <label class="slider" id="speedLabel" for="speed">速度</label>
-      <button id="speedDown" class="step" aria-label="遅くする">−</button>
-      <input type="range" id="speed" min="0" max="100" value="36" aria-label="時間の速さ">
-      <button id="speedUp" class="step" aria-label="速くする">＋</button>
-      <span id="speedVal"></span>
-    </div>
-    <div class="sep"></div>
-    <div class="group">
-      <span class="slider" id="zoomLabel">ズーム</span>
-      <button id="zoomOut" class="step" aria-label="遠ざける">−</button>
-      <input type="range" id="zoom" min="0" max="100" value="40" aria-label="ズーム">
-      <button id="zoomIn" class="step" aria-label="近づける">＋</button>
-      <span id="zoomVal"></span>
-    </div>
-    <div class="sep"></div>
-    <div class="group">
-      <span class="slider" id="angleLabel">角度</span>
-      <button id="angleDown" class="step" aria-label="角度を下げる">−</button>
-      <input type="range" id="angle" min="-87" max="87" value="20" aria-label="カメラ角度">
-      <button id="angleUp" class="step" aria-label="角度を上げる">＋</button>
-      <span id="angleVal"></span>
-    </div>
-    <div class="sep"></div>
-    <div class="group">
-      <span class="slider" id="cameraLabel">カメラ</span>
+    <button id="play" class="primary">⏸ 停止</button>
+    <label class="slider" id="speedLabel" for="speed">速度</label>
+    <button id="speedDown" class="step" aria-label="遅くする">−</button>
+    <input type="range" id="speed" min="0" max="100" value="36" aria-label="時間の速さ">
+    <button id="speedUp" class="step" aria-label="速くする">＋</button>
+    <span id="speedVal"></span>
+
+    <span></span>
+    <span class="slider" id="zoomLabel">ズーム</span>
+    <button id="zoomOut" class="step" aria-label="遠ざける">−</button>
+    <input type="range" id="zoom" min="0" max="100" value="40" aria-label="ズーム">
+    <button id="zoomIn" class="step" aria-label="近づける">＋</button>
+    <span id="zoomVal"></span>
+
+    <span></span>
+    <span class="slider" id="angleLabel">角度</span>
+    <button id="angleDown" class="step" aria-label="角度を下げる">−</button>
+    <input type="range" id="angle" min="-87" max="87" value="20" aria-label="カメラ角度">
+    <button id="angleUp" class="step" aria-label="角度を上げる">＋</button>
+    <span id="angleVal"></span>
+
+    <span class="slider" id="cameraLabel">カメラ</span>
+    <div class="camRow">
       <button id="viewTopBtn">真上</button>
       <button id="viewDefBtn">デフォルト</button>
       <button id="viewSideBtn">真横</button>
@@ -2054,7 +2057,19 @@
     hideHint();
   }
 
+  // モバイル: 情報パネルを操作パネルのすぐ上に配置 (実高さを測って追従)
+  function positionInfoPanel() {
+    if (window.matchMedia("(max-width: 720px)").matches) {
+      const top = document.getElementById("controls").getBoundingClientRect().top;
+      infoPanel.style.bottom = Math.round(window.innerHeight - top + 8) + "px";
+    } else {
+      infoPanel.style.bottom = "";
+    }
+  }
+  window.addEventListener("resize", positionInfoPanel);
+
   function openInfo(body) {
+    positionInfoPanel();
     const d = lang === "en" ? EN_DATA[body.key] : null;
     document.getElementById("infoEyebrow").textContent = lang === "ja" ? body.en : body.name;
     document.getElementById("infoName").textContent = bName(body);
@@ -2554,6 +2569,7 @@
     }
     setPlaying(playing);
     speedFromSlider();
+    positionInfoPanel();
     if (selected) openInfo(selected);
     if (aboutEl.classList.contains("open")) buildAbout();
   }
