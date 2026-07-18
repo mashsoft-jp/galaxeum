@@ -153,9 +153,9 @@
   #navCollapse {
     align-self: stretch;
     text-align: right;
-    padding: 2px 6px;
-    font-size: 12px;
-    line-height: 1.2;
+    padding: 8px 12px;
+    font-size: 17px;
+    line-height: 1;
     color: var(--dim);
     background: none;
     border: none;
@@ -174,13 +174,14 @@
   #navExpand {
     position: absolute;
     top: 76px; left: 0;
-    padding: 5px 8px 5px 5px;
-    font-size: 11px;
+    padding: 14px 12px 14px 8px;
+    font-size: 16px;
+    line-height: 1;
     color: var(--dim);
     background: var(--panel);
     border: 1px solid var(--line);
     border-left: none;
-    border-radius: 0 4px 4px 0;
+    border-radius: 0 6px 6px 0;
     display: none;
   }
   #navExpand:hover { color: var(--text); }
@@ -321,7 +322,7 @@
     width: 150px;
     accent-color: var(--accent);
   }
-  #speedVal {
+  #speedVal, #zoomVal {
     font-family: var(--font-num);
     font-variant-numeric: tabular-nums;
     font-size: 11.5px;
@@ -519,6 +520,14 @@
     </div>
     <div class="sep"></div>
     <div class="group">
+      <span class="slider" id="zoomLabel">ズーム</span>
+      <button id="zoomOut" class="step" aria-label="遠ざける">−</button>
+      <input type="range" id="zoom" min="0" max="100" value="40" aria-label="ズーム">
+      <button id="zoomIn" class="step" aria-label="近づける">＋</button>
+      <span id="zoomVal"></span>
+    </div>
+    <div class="sep"></div>
+    <div class="group">
       <span class="slider" id="cameraLabel">カメラ</span>
       <button id="viewTopBtn">真上</button>
       <button id="viewDefBtn">デフォルト</button>
@@ -699,7 +708,7 @@
   const UI = {
     ja: {
       title: "Orbitarium — 太陽系シミュレータ",
-      pause: "⏸ 停止", play: "▶ 再生", speed: "速度",
+      pause: "⏸ 停止", play: "▶ 再生", speed: "速度", zoom: "ズーム",
       orbits: "軌道", labels: "名前", reset: "全体表示",
       nowBtn: "現在時刻に合わせる", paused: "SIMULATION PAUSED", ratePrefix: "1秒 = ",
       viewTop: "真上", viewDef: "デフォルト", viewSide: "真横", camera: "カメラ",
@@ -714,7 +723,7 @@
     },
     en: {
       title: "Orbitarium — Solar System Simulator",
-      pause: "⏸ Pause", play: "▶ Play", speed: "Speed",
+      pause: "⏸ Pause", play: "▶ Play", speed: "Speed", zoom: "Zoom",
       orbits: "Orbits", labels: "Labels", reset: "Overview",
       nowBtn: "Set to current time", paused: "SIMULATION PAUSED", ratePrefix: "1s = ",
       viewTop: "Top", viewDef: "Default", viewSide: "Side", camera: "Camera",
@@ -1466,8 +1475,8 @@
   // ---------- リサイズ ----------
   function resize() {
     DPR = Math.min(window.devicePixelRatio || 1, 2);
-    W = window.innerWidth;
-    H = window.innerHeight;
+    W = window.innerWidth || 1;
+    H = window.innerHeight || 1;
     glc.width = W * DPR; glc.height = H * DPR;
     ovl.width = W * DPR; ovl.height = H * DPR;
     gl.viewport(0, 0, W * DPR, H * DPR);
@@ -1992,6 +2001,7 @@
 
     render(now / 1000);
     updateClock();
+    updateZoomUI();
     requestAnimationFrame(frame);
   }
 
@@ -2218,19 +2228,64 @@
     speedInput.value = Math.max(0, Math.min(100, Number(speedInput.value) + d));
     speedFromSlider();
   }
-  function bindStep(btn, d) {
+  function bindHold(btn, fire) {
     let delay = null, rep = null;
     const stop = () => { clearTimeout(delay); clearInterval(rep); delay = rep = null; };
     btn.addEventListener("pointerdown", () => {
-      stepSpeed(d);
-      delay = setTimeout(() => { rep = setInterval(() => stepSpeed(d), 120); }, 400);
+      fire();
+      delay = setTimeout(() => { rep = setInterval(fire, 120); }, 400);
     });
     for (const ev of ["pointerup", "pointerleave", "pointercancel"]) btn.addEventListener(ev, stop);
     // キーボード操作 (Enter/Space) は click の detail=0 で拾う
-    btn.addEventListener("click", (e) => { if (e.detail === 0) stepSpeed(d); });
+    btn.addEventListener("click", (e) => { if (e.detail === 0) fire(); });
   }
-  bindStep(document.getElementById("speedDown"), -5);
-  bindStep(document.getElementById("speedUp"), 5);
+  bindHold(document.getElementById("speedDown"), () => stepSpeed(-5));
+  bindHold(document.getElementById("speedUp"), () => stepSpeed(5));
+
+  // ---------- ズーム (カメラ距離。ピンチ/ホイールと双方向同期) ----------
+  const zoomInput = document.getElementById("zoom");
+  const zoomVal = document.getElementById("zoomVal");
+  const ZD_MIN = 1e-6, ZD_MAX = 1400;
+  const ZLOG = Math.log(ZD_MAX / ZD_MIN);
+  let zoomActive = false;
+  let lastZoomStr = "", lastZoomSlider = "";
+  function fmtDist(d) {
+    const au = d / K_REAL;
+    if (au >= 1) return au.toFixed(2) + " au";
+    if (au >= 0.01) return au.toFixed(3) + " au";
+    return Math.round(au * AU_KM).toLocaleString("en-US") + " km";
+  }
+  // スライダー右 = 接近 (ズームイン)
+  function zoomFromSlider() {
+    const t = zoomInput.value / 100;
+    cam.distTgt = Math.max(minDist(), Math.min(ZD_MAX, ZD_MAX * Math.exp(-ZLOG * t)));
+    hideHint();
+  }
+  zoomInput.addEventListener("input", zoomFromSlider);
+  zoomInput.addEventListener("pointerdown", () => { zoomActive = true; });
+  window.addEventListener("pointerup", () => { zoomActive = false; });
+  function stepZoom(d) {
+    zoomInput.value = Math.max(0, Math.min(100, Number(zoomInput.value) + d));
+    zoomFromSlider();
+  }
+  bindHold(document.getElementById("zoomOut"), () => stepZoom(-4));
+  bindHold(document.getElementById("zoomIn"), () => stepZoom(4));
+  // 現在のカメラ距離をスライダーと数値表示へ反映 (毎フレーム呼ばれる)
+  function updateZoomUI() {
+    if (!zoomActive) {
+      const t = Math.log(ZD_MAX / Math.max(cam.dist, ZD_MIN)) / ZLOG;
+      const v = String(Math.round(Math.min(100, Math.max(0, t * 100))));
+      if (v !== lastZoomSlider) {
+        zoomInput.value = v;
+        lastZoomSlider = v;
+      }
+    }
+    const s = fmtDist(cam.dist);
+    if (s !== lastZoomStr) {
+      zoomVal.textContent = s;
+      lastZoomStr = s;
+    }
+  }
 
   // まとめて ON/OFF (1つでも ON なら全 OFF、全 OFF なら全 ON)
   const orbitsBtn = document.getElementById("orbitsBtn");
@@ -2260,7 +2315,9 @@
     select(null, false);
     cam.focusTgt[0] = 0; cam.focusTgt[1] = 0; cam.focusTgt[2] = 0;
     const R = 19;                                  // 火星軌道 (遠日点) + 余白 [world]
-    cam.distTgt = R / (Math.tan(FOV / 2) * Math.min(1, W / H)) * 1.15;
+    const aspect = Math.min(1, (W / H) || 1);
+    cam.distTgt = R / (Math.tan(FOV / 2) * aspect) * 1.15;
+    if (!isFinite(cam.distTgt)) cam.distTgt = 55;
     setPitch(0.35);
   }
   document.getElementById("viewDefBtn").addEventListener("click", goDefaultView);
@@ -2367,6 +2424,7 @@
     document.getElementById("hint").textContent = t.hint;
     document.getElementById("noGL").innerHTML = t.noGL;
     document.getElementById("speedLabel").textContent = t.speed;
+    document.getElementById("zoomLabel").textContent = t.zoom;
     orbitsBtn.textContent = t.orbits;
     labelsBtn.textContent = t.labels;
     document.getElementById("resetBtn").textContent = t.reset;
