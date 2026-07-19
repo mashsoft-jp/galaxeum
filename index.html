@@ -471,6 +471,46 @@
     button { padding: 6px 9px; font-size: 11px; }
     #play { min-width: 64px; }
   }
+
+  /* ---- 横向きスマホ / 高さの低い画面 (Landscape) ---- */
+  @media (max-height: 480px) {
+    #title { padding: 6px 10px 6px 6px; gap: 6px; }
+    #title h1 { font-size: 11px; letter-spacing: 0.14em; }
+    #menuBtn { padding: 4px 6px; font-size: 15px; }
+    #menu { top: 54px; }
+    #clock { padding: 5px 10px; }
+    #dateInput { font-size: 13px; }
+    #timeText { font-size: 13px; }
+    #nowBtn { font-size: 9px; padding: 2px 8px; margin-top: 3px; }
+    #clock .rate { display: none; }
+    #hint { display: none; }
+    #navPanel { top: 54px; max-height: calc(100vh - 185px); }
+    #navExpand { top: 54px; }
+    #nav button { padding: 3px 9px; font-size: 10px; }
+    #controls {
+      left: 8px;
+      transform: none;
+      bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+      gap: 3px 6px;
+      padding: 6px 10px;
+      grid-template-columns: auto auto auto minmax(70px, 130px) auto auto;
+    }
+    #controls button { padding: 3px 8px; font-size: 10.5px; }
+    #play { min-width: 56px; }
+    /* 情報パネルは右側に縦利用 (時計の下から) */
+    #info {
+      top: 58px;
+      right: 8px;
+      bottom: auto;
+      left: auto;
+      transform: translateX(16px);
+      width: min(250px, 38vw);
+      max-height: calc(100vh - 66px);
+      overflow-y: auto;
+      scrollbar-width: thin;
+    }
+    #info.open { transform: none; }
+  }
 </style>
 
 <div id="app">
@@ -526,7 +566,7 @@
     <button id="play" class="primary">⏸ 停止</button>
     <label class="slider" id="speedLabel" for="speed">速度</label>
     <button id="speedDown" class="step" aria-label="遅くする">−</button>
-    <input type="range" id="speed" min="0" max="100" value="36" aria-label="時間の速さ">
+    <input type="range" id="speed" min="0" max="100" value="0" aria-label="時間の速さ">
     <button id="speedUp" class="step" aria-label="速くする">＋</button>
     <span id="speedVal"></span>
 
@@ -1978,6 +2018,7 @@
 
   // ---------- メインループ ----------
   let last = performance.now();
+  let lastSettingsSave = 0;
   let followKey = null;                   // 前フレームで追従していた天体
   const followPrev = [0, 0, 0];
   function frame(now) {
@@ -2024,6 +2065,10 @@
     updateClock();
     updateZoomUI();
     updateAngleUI();
+    if (now - lastSettingsSave > 2000) {
+      lastSettingsSave = now;
+      saveSettings();
+    }
     requestAnimationFrame(frame);
   }
 
@@ -2363,6 +2408,15 @@
   }
   bindHold(document.getElementById("angleDown"), () => stepAngle(-1));
   bindHold(document.getElementById("angleUp"), () => stepAngle(1));
+
+  // ---------- 操作パネル設定の保存 (速度・ズーム・角度) ----------
+  function saveSettings() {
+    try {
+      localStorage.setItem("ssSpeed", String(daysPerSec));
+      localStorage.setItem("ssZoom", String(cam.distTgt));
+      localStorage.setItem("ssAngle", String(cam.pitchTgt));
+    } catch (e) { /* プライベートモード等では保存しない */ }
+  }
   // 現在の仰角をスライダーと数値表示へ反映 (毎フレーム呼ばれる)
   function updateAngleUI() {
     const deg = cam.pitch / DEG;
@@ -2594,6 +2648,27 @@
   // 初期カメラは「デフォルト」ビュー (内惑星が収まる俯瞰) に即時セット
   goDefaultView();
   cam.dist = cam.distTgt;
+  // 保存済みの操作パネル設定を復元 (速度・ズーム・角度)
+  {
+    const sp = parseFloat(localStorage.getItem("ssSpeed"));
+    if (isFinite(sp) && sp > 0) {
+      daysPerSec = sp;
+      speedInput.value = Math.max(0, Math.min(100,
+        Math.round(18 * Math.log(sp * 86400) / Math.log(60))));
+      speedVal.textContent = T().ratePrefix + fmtDays(daysPerSec);
+    }
+    // ズームは俯瞰域のみ復元 (天体接近中の至近距離は選択が復元されないため除外)
+    const zd = parseFloat(localStorage.getItem("ssZoom"));
+    if (isFinite(zd) && zd >= 1) {
+      cam.distTgt = Math.min(1400, zd);
+      cam.dist = cam.distTgt;
+    }
+    const an = parseFloat(localStorage.getItem("ssAngle"));
+    if (isFinite(an)) {
+      cam.pitchTgt = Math.max(-1.52, Math.min(1.52, an));
+      cam.pitch = cam.pitchTgt;
+    }
+  }
   requestAnimationFrame(frame);
 })();
 </script>
