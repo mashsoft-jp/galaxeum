@@ -2095,10 +2095,21 @@
     }
     openInfo(body);
     if (fly) {
-      // 天体から10万kmの距離へ (10万kmが天体内部になる大きな天体は半径の2.2倍)
+      // 天体からの接近距離 (km)。サイズに応じて調整、未指定は10万km
+      const zoomKm = {
+        mercury: 50000, moon: 30000, mars: 50000,
+        phobos: 100, deimos: 100,
+        jupiter: 1000000, io: 30000, europa: 30000, ganymede: 50000, callisto: 50000,
+        saturn: 1000000, titan: 50000,
+        uranus: 300000, titania: 20000,
+        neptune: 300000, triton: 30000,
+        pluto: 30000, charon: 20000,
+        ceres: 10000, vesta: 10000, pallas: 10000, juno: 10000,
+        halley: 1000,
+      };
       cam.distTgt = body === SUN
         ? bodyR(SUN) * 4.2
-        : Math.max(bodyR(body) * 2.2, 100000 * KM2W);
+        : Math.max(bodyR(body) * 2.2, (zoomKm[body.key] || 100000) * KM2W);
       if (body !== SUN) {
         // 太陽光の当たる側 (太陽と天体の間) へ回り込む
         const w = posW.get(body.key);
