@@ -1526,6 +1526,7 @@
   let playing = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   let daysPerSec = 8;
   let selected = null;                    // SUN / PLANETS[i] / MOON / null
+  let lastCenter = null;                   // 最後に中心にした天体 (解除後のズーム下限に使用)
   const FOV = 45 * DEG;
 
   // カメラ (注視点 + 距離 + 角度)
@@ -1563,7 +1564,10 @@
   }
 
   function minDist() {
-    return selected ? bodyR(selected) * 1.7 : bodyR(SUN) * 2.2;
+    // 解除後も最後に中心だった天体のサイズを下限に使う (解除時に太陽サイズの下限へ
+    // 跳ね上がってズームが一気に引かれるのを防ぐ)。中心が太陽/原点のときは太陽サイズ。
+    const b = selected || lastCenter;
+    return b && b !== SUN ? bodyR(b) * 1.7 : bodyR(SUN) * 2.2;
   }
 
   // ---------- リサイズ ----------
@@ -2128,6 +2132,7 @@
         cam.focus[2] += t[2] - followPrev[2];
       }
       followKey = selected.key;
+      lastCenter = selected;
       cam.focusTgt[0] = t[0]; cam.focusTgt[1] = t[1]; cam.focusTgt[2] = t[2];
     } else {
       followKey = null;
@@ -2625,6 +2630,7 @@
   // デフォルト: 太陽中心に内惑星 (火星軌道まで) がちょうど収まる俯瞰
   function goDefaultView() {
     select(null, false);
+    lastCenter = null;                             // 太陽中心へ戻るので下限も太陽サイズに
     cam.focusTgt[0] = 0; cam.focusTgt[1] = 0; cam.focusTgt[2] = 0;
     const R = 19;                                  // 火星軌道 (遠日点) + 余白 [world]
     const aspect = Math.min(1, (W / H) || 1);
@@ -2636,6 +2642,7 @@
 
   document.getElementById("resetBtn").addEventListener("click", () => {
     select(null, false);
+    lastCenter = null;
     cam.focusTgt[0] = 0; cam.focusTgt[1] = 0; cam.focusTgt[2] = 0;
     cam.distTgt = 1150;
     cam.yawTgt = 0.9; cam.pitchTgt = 0.35;
