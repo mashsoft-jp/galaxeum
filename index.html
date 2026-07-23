@@ -305,8 +305,18 @@
     font-size: 11.5px; color: var(--text); white-space: nowrap;
   }
   #gFovVal { min-width: 88px; text-align: left; }
-  #gAzDir { min-width: 88px; text-align: left; color: var(--dim); }
-  #gCompass { width: 46px; height: 46px; justify-self: center; }
+  /* 方位磁石 (左下フロート) */
+  #gAzCtrl {
+    position: absolute; left: 16px; bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+    z-index: 14; flex-direction: column; align-items: center; gap: 4px;
+    padding: 10px 12px; border-radius: 12px;
+    background: rgba(16, 22, 42, 0.72); border: 1px solid var(--line);
+    backdrop-filter: blur(4px);
+  }
+  #app.groundMode #gAzCtrl { display: flex; }
+  #gAzCtrl .gazrow { display: flex; align-items: center; gap: 8px; }
+  #gAzDir { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: 11px; color: var(--dim); white-space: nowrap; }
+  #gCompass { width: 58px; height: 58px; }
   #gCompass .cpt { fill: var(--dim); font-size: 9px; font-family: var(--font-ui); text-anchor: middle; dominant-baseline: middle; }
   #gCompass .cpn { fill: #e8785f; }
   /* 高度の縦スライダー (右端フロート) */
@@ -723,26 +733,28 @@
     <input type="range" id="gFov" class="groundOnly" min="0" max="100" value="43" aria-label="ズーム">
     <button id="gFovIn" class="step groundOnly" aria-label="ズームイン">＋</button>
     <span id="gFovVal" class="groundOnly"></span>
-
-    <span class="groundOnly"></span>
-    <span class="slider groundOnly" id="gAzLabel">方位</span>
-    <button id="gAzLeft" class="step groundOnly" aria-label="左へ回す">◀</button>
-    <svg id="gCompass" class="groundOnly" viewBox="-26 -26 52 52" aria-hidden="true">
-      <circle cx="0" cy="0" r="22" fill="none" stroke="var(--line)" stroke-width="1.5"/>
-      <text class="cpt cpn" x="0" y="-13">N</text>
-      <text class="cpt" x="15" y="5">E</text>
-      <text class="cpt" x="0" y="19">S</text>
-      <text class="cpt" x="-15" y="5">W</text>
-      <polygon id="gNeedle" points="0,-17 -3.5,3 0,-1 3.5,3" fill="var(--accent)"/>
-    </svg>
-    <button id="gAzRight" class="step groundOnly" aria-label="右へ回す">▶</button>
-    <span id="gAzDir" class="groundOnly"></span>
   </footer>
 
   <div id="gAltCtrl" class="groundOnly">
     <span id="gAltLabelTop">高度</span>
     <input type="range" id="gAlt" min="-80" max="90" value="30" aria-label="高度">
     <span id="gAltVal"></span>
+  </div>
+
+  <div id="gAzCtrl" class="groundOnly">
+    <div class="gazrow">
+      <button id="gAzLeft" class="step" aria-label="左へ回す">◀</button>
+      <svg id="gCompass" viewBox="-26 -26 52 52" aria-hidden="true">
+        <circle cx="0" cy="0" r="22" fill="none" stroke="var(--line)" stroke-width="1.5"/>
+        <text class="cpt cpn" x="0" y="-13">N</text>
+        <text class="cpt" x="15" y="5">E</text>
+        <text class="cpt" x="0" y="19">S</text>
+        <text class="cpt" x="-15" y="5">W</text>
+        <polygon id="gNeedle" points="0,-17 -3.5,3 0,-1 3.5,3" fill="var(--accent)"/>
+      </svg>
+      <button id="gAzRight" class="step" aria-label="右へ回す">▶</button>
+    </div>
+    <span id="gAzDir"></span>
   </div>
 </div>
 
@@ -1824,6 +1836,7 @@
   // ---------- 地上ビュー (地球から空を見上げる) ----------
   let groundView = false;
   let gAz = 0, gAlt = 0.45, gFov = 60 * DEG;   // 視線方位・高度 (rad)・画角
+  const MIN_FOV = 0.25 * DEG, MAX_FOV = 90 * DEG;   // 望遠鏡並みの拡大まで許可
   const _fwd = [0, 0, 0], _gp = [0, 0, 0], gVP = mIdent();
   let groundVB = null, groundPtVB = null, horizonVB = null, horizonN = 0;
   const SKY_BODIES = [SUN, MOON].concat(
@@ -1844,7 +1857,7 @@
   const magSize = (m) => Math.max(1.6, Math.min(9, 6 - m * 1.2));
   const SKYR = 100;
   const groundVis = [];
-  function renderGround() {
+  function renderGround(nowSec) {
     if (!groundVB) {
       const GR = 600;
       groundVB = gl.createBuffer();
@@ -1925,14 +1938,22 @@
       }
     }
 
-    // 太陽系天体 (地平線より上のみ) を点で配置
+    // 太陽系天体: 小さいうちは点、拡大されたらテクスチャ球で描画
     groundVis.length = 0;
     let n = 0;
+    const bigBodies = [];
+    const halfFov = gFov * 0.5, halfH = H * 0.5;
     for (const b of SKY_BODIES) {
       const c = computeObs(b);
       if (c.alt < -1 && b !== selected) continue;   // 選択天体は地平線下でも描画
       azAltDir(c.az, c.alt, _gp);
       const px = _gp[0]*SKYR, py = _gp[1]*SKYR, pz = _gp[2]*SKYR;
+      groundVis.push({ b, px, py, pz });
+      const angR = Math.asin(Math.min(0.9, b.rkm / (c.distAU * AU_KM)));
+      if (angR / halfFov * halfH >= 5) {            // 画面上で十分大きい → 球
+        bigBodies.push({ b, dx: _gp[0], dy: _gp[1], dz: _gp[2], px, py, pz, wr: SKYR * Math.tan(angR) });
+        continue;
+      }
       let size, r, g, bl;
       if (b === SUN) { size = 18; r = 1.0; g = 0.9; bl = 0.6; }
       else if (b.key === "moon") { size = 11; r = 0.9; g = 0.92; bl = 0.96; }
@@ -1941,7 +1962,6 @@
       groundPtArr[o]=px; groundPtArr[o+1]=py; groundPtArr[o+2]=pz;
       groundPtArr[o+3]=size; groundPtArr[o+4]=r; groundPtArr[o+5]=g; groundPtArr[o+6]=bl;
       n++;
-      groundVis.push({ b, px, py, pz });
     }
     if (n) {
       gl.useProgram(pointP.pr);
@@ -1958,7 +1978,49 @@
       gl.vertexAttribPointer(pointP.a.aCol, 3, gl.FLOAT, false, 28, 16);
       gl.drawArrays(gl.POINTS, 0, n);
     }
-    gl.depthMask(true); gl.disable(gl.BLEND);
+    gl.disable(gl.BLEND);
+    // 拡大された天体はテクスチャ球で描画。太陽方向から照らすので満ち欠けも再現される
+    if (bigBodies.length) {
+      const sc = computeObs(SUN);
+      azAltDir(sc.az, sc.alt, _fwd);
+      gl.enable(gl.DEPTH_TEST); gl.depthMask(true); gl.clear(gl.DEPTH_BUFFER_BIT);
+      gl.useProgram(bodyP.pr);
+      gl.bindBuffer(gl.ARRAY_BUFFER, sphereVB);
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, sphereIB);
+      gl.enableVertexAttribArray(bodyP.a.aPos);
+      gl.vertexAttribPointer(bodyP.a.aPos, 3, gl.FLOAT, false, 0, 0);
+      gl.uniform1f(bodyP.u.uTime, nowSec);
+      gl.uniform3f(bodyP.u.uCam, 0, 0, 0);
+      gl.uniform3f(bodyP.u.uSun, _fwd[0]*SKYR, _fwd[1]*SKYR, _fwd[2]*SKYR);
+      for (const bb of bigBodies) {
+        const b = bb.b, R = bb.wr;
+        // 観測者(原点)を向く姿勢・北を上に。テクスチャ中心が手前を向く (月は表側が見える)
+        const nx = -bb.dx, ny = -bb.dy, nz = -bb.dz;
+        const upd = ny;
+        let yx = -upd*nx, yy = 1 - upd*ny, yz = -upd*nz;
+        const yl = Math.hypot(yx, yy, yz) || 1; yx/=yl; yy/=yl; yz/=yl;
+        const zx = ny*yz - nz*yy, zy = nz*yx - nx*yz, zz = nx*yy - ny*yx;
+        const m = SCR.model;
+        m[0]=nx*R; m[1]=ny*R; m[2]=nz*R; m[3]=0;
+        m[4]=yx*R; m[5]=yy*R; m[6]=yz*R; m[7]=0;
+        m[8]=zx*R; m[9]=zy*R; m[10]=zz*R; m[11]=0;
+        m[12]=bb.px; m[13]=bb.py; m[14]=bb.pz; m[15]=1;
+        const tx = texByKey.get(b.key);
+        gl.bindTexture(gl.TEXTURE_2D, tx || noTex);
+        gl.uniform1f(bodyP.u.uHasTex, tx ? 1 : 0);
+        gl.uniformMatrix4fv(bodyP.u.uMVP, false, mMul(gVP, m, SCR.mvp));
+        gl.uniformMatrix4fv(bodyP.u.uModel, false, m);
+        gl.uniform1f(bodyP.u.uType, b.type);
+        gl.uniform3fv(bodyP.u.uColA, b.colA);
+        gl.uniform3fv(bodyP.u.uColB, b.colB);
+        gl.uniform3fv(bodyP.u.uColC, b.colC);
+        gl.uniform3fv(bodyP.u.uRim, b.rim);
+        gl.uniform4fv(bodyP.u.uParams, b.params);
+        gl.drawElements(gl.TRIANGLES, sphere.idx.length, gl.UNSIGNED_SHORT, 0);
+      }
+      gl.disable(gl.DEPTH_TEST);
+    }
+    gl.depthMask(true);
     drawGroundOverlay();
   }
   function drawGroundOverlay() {
@@ -2015,7 +2077,7 @@
   }
 
   function render(nowSec) {
-    if (groundView) { renderGround(); return; }
+    if (groundView) { renderGround(nowSec); return; }
     // --- カメラ ---
     const eye = [
       cam.focus[0] + cam.dist * Math.cos(cam.pitch) * Math.cos(cam.yaw),
@@ -2985,8 +3047,9 @@
 
     if (pointers.size === 1) {
       if (groundView) {
-        gAz += dx * 0.004;
-        gAlt = Math.max(-1.4, Math.min(1.4, gAlt - dy * 0.004));
+        const s = 0.004 * (gFov / (60 * DEG));   // 拡大時ほど細かく
+        gAz += dx * s;
+        gAlt = Math.max(-1.4, Math.min(1.4, gAlt - dy * s));
       } else {
         cam.yaw += dx * 0.005;
         cam.pitch = Math.max(-1.45, Math.min(1.45, cam.pitch + dy * 0.005));
@@ -2997,7 +3060,7 @@
       const [a, b] = [...pointers.values()];
       const d = Math.hypot(a.x - b.x, a.y - b.y);
       if (groundView) {
-        if (pinchDist > 0) gFov = Math.max(20 * DEG, Math.min(90 * DEG, gFov * pinchDist / d));
+        if (pinchDist > 0) gFov = Math.max(MIN_FOV, Math.min(MAX_FOV, gFov * pinchDist / d));
       } else if (pinchDist > 0) {
         cam.distTgt = Math.max(minDist(), Math.min(1400, cam.distTgt * pinchDist / d));
       }
@@ -3027,7 +3090,7 @@
   glc.addEventListener("wheel", (e) => {
     e.preventDefault();
     if (groundView) {
-      gFov = Math.max(20 * DEG, Math.min(90 * DEG, gFov * Math.exp(e.deltaY * 0.0012)));
+      gFov = Math.max(MIN_FOV, Math.min(MAX_FOV, gFov * Math.exp(e.deltaY * 0.0012)));
     } else {
       cam.distTgt = Math.max(minDist(), Math.min(1400, cam.distTgt * Math.exp(e.deltaY * 0.0016)));
     }
@@ -3176,23 +3239,25 @@
   const gAltVal = document.getElementById("gAltVal");
   let gFovActive = false, gAltActive = false;
   let lastGFov = "", lastGAz = "", lastGAlt = "";
-  gFovInput.addEventListener("input", () => { gFov = (90 - 0.70 * gFovInput.value) * DEG; });
+  const FOV_RATIO = Math.log(MIN_FOV / MAX_FOV);
+  gFovInput.addEventListener("input", () => { gFov = MAX_FOV * Math.exp(FOV_RATIO * gFovInput.value / 100); });
   gFovInput.addEventListener("pointerdown", () => { gFovActive = true; });
   gAltInput.addEventListener("input", () => { gAlt = gAltInput.value * DEG; });
   gAltInput.addEventListener("pointerdown", () => { gAltActive = true; });
   window.addEventListener("pointerup", () => { gFovActive = false; gAltActive = false; });
-  const stepFov = (dir) => { gFov = Math.max(20 * DEG, Math.min(90 * DEG, gFov + dir * 5 * DEG)); };
+  const stepFov = (dir) => { gFov = Math.max(MIN_FOV, Math.min(MAX_FOV, gFov * (dir > 0 ? 1.3 : 1 / 1.3))); };
   bindHold(document.getElementById("gFovOut"), () => stepFov(1));    // − = 広げる
   bindHold(document.getElementById("gFovIn"), () => stepFov(-1));    // ＋ = 狭める (ズームイン)
-  bindHold(document.getElementById("gAzLeft"), () => { gAz -= 15 * DEG; });
-  bindHold(document.getElementById("gAzRight"), () => { gAz += 15 * DEG; });
+  bindHold(document.getElementById("gAzLeft"), () => { gAz -= gFov * 0.4; });
+  bindHold(document.getElementById("gAzRight"), () => { gAz += gFov * 0.4; });
   function updateGroundUI() {
     if (!groundView) return;
     if (!gFovActive) {
-      const v = String(Math.round((90 - gFov / DEG) / 0.70));
+      const v = String(Math.round(100 * Math.log(gFov / MAX_FOV) / FOV_RATIO));
       if (gFovInput.value !== v) gFovInput.value = v;
     }
-    const fv = "×" + (1 / Math.tan(gFov / 2)).toFixed(1);
+    const z = 1 / Math.tan(gFov / 2);
+    const fv = "×" + (z < 10 ? z.toFixed(1) : Math.round(z));
     if (fv !== lastGFov) { gFovVal.textContent = fv; lastGFov = fv; }
     const azn = ((gAz / DEG) % 360 + 360) % 360;
     const as = Math.round(azn) + "°";
@@ -3476,7 +3541,6 @@
     document.getElementById("viewDefBtn").textContent = t.viewDef;
     document.getElementById("viewSideBtn").textContent = t.viewSide;
     document.getElementById("gFovLabel").textContent = t.gFovLabel;
-    document.getElementById("gAzLabel").textContent = t.gAzLabel;
     document.getElementById("gAltLabelTop").textContent = t.gAltLabel;
     lastGAz = "";   // 方角ラベルを言語に合わせて再描画
     document.getElementById("nowBtn").textContent = t.nowBtn;
