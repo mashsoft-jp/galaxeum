@@ -305,8 +305,10 @@
     font-size: 11.5px; color: var(--text); white-space: nowrap;
   }
   #gFovVal { min-width: 88px; text-align: left; }
-  #gAzReadout { text-align: center; }
   #gAzDir { min-width: 88px; text-align: left; color: var(--dim); }
+  #gCompass { width: 46px; height: 46px; justify-self: center; }
+  #gCompass .cpt { fill: var(--dim); font-size: 9px; font-family: var(--font-ui); text-anchor: middle; dominant-baseline: middle; }
+  #gCompass .cpn { fill: #e8785f; }
   /* 高度の縦スライダー (右端フロート) */
   #gAltCtrl {
     position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
@@ -716,16 +718,23 @@
 
     <!-- 地上ビュー用 -->
     <span class="groundOnly"></span>
-    <span class="slider groundOnly" id="gFovLabel">画角</span>
-    <button id="gFovOut" class="step groundOnly" aria-label="画角を広げる">−</button>
-    <input type="range" id="gFov" class="groundOnly" min="0" max="100" value="43" aria-label="画角">
-    <button id="gFovIn" class="step groundOnly" aria-label="画角を狭める">＋</button>
+    <span class="slider groundOnly" id="gFovLabel">ズーム</span>
+    <button id="gFovOut" class="step groundOnly" aria-label="ズームアウト">−</button>
+    <input type="range" id="gFov" class="groundOnly" min="0" max="100" value="43" aria-label="ズーム">
+    <button id="gFovIn" class="step groundOnly" aria-label="ズームイン">＋</button>
     <span id="gFovVal" class="groundOnly"></span>
 
     <span class="groundOnly"></span>
     <span class="slider groundOnly" id="gAzLabel">方位</span>
     <button id="gAzLeft" class="step groundOnly" aria-label="左へ回す">◀</button>
-    <span id="gAzReadout" class="groundOnly"></span>
+    <svg id="gCompass" class="groundOnly" viewBox="-26 -26 52 52" aria-hidden="true">
+      <circle cx="0" cy="0" r="22" fill="none" stroke="var(--line)" stroke-width="1.5"/>
+      <text class="cpt cpn" x="0" y="-13">N</text>
+      <text class="cpt" x="15" y="5">E</text>
+      <text class="cpt" x="0" y="19">S</text>
+      <text class="cpt" x="-15" y="5">W</text>
+      <polygon id="gNeedle" points="0,-17 -3.5,3 0,-1 3.5,3" fill="var(--accent)"/>
+    </svg>
     <button id="gAzRight" class="step groundOnly" aria-label="右へ回す">▶</button>
     <span id="gAzDir" class="groundOnly"></span>
   </footer>
@@ -912,7 +921,7 @@
       orbits: "軌道", labels: "名前", reset: "全体表示",
       nowBtn: "現在時刻に合わせる", paused: "SIMULATION PAUSED", ratePrefix: "1秒 = ",
       viewTop: "真上", viewDef: "デフォルト", viewSide: "真横", camera: "カメラ",
-      gFovLabel: "画角", gAzLabel: "方位", gAltLabel: "高度",
+      gFovLabel: "ズーム", gAzLabel: "方位", gAltLabel: "高度",
       hint: "ドラッグで回転 ・ ホイール / ピンチでズーム ・ 天体クリックで接近",
       noGL: "お使いの環境では WebGL が利用できないため、<br>3D 表示を開始できませんでした。",
       imgPrefix: "画像: ", procTex: "テクスチャ: シェーダによる生成 (実写ではありません)",
@@ -946,7 +955,7 @@
       orbits: "Orbits", labels: "Labels", reset: "Overview",
       nowBtn: "Set to current time", paused: "SIMULATION PAUSED", ratePrefix: "1s = ",
       viewTop: "Top", viewDef: "Default", viewSide: "Side", camera: "Camera",
-      gFovLabel: "FOV", gAzLabel: "Azimuth", gAltLabel: "Alt",
+      gFovLabel: "Zoom", gAzLabel: "Azimuth", gAltLabel: "Alt",
       hint: "Drag to rotate · Wheel / pinch to zoom · Click a body to approach",
       noGL: "WebGL is not available in this environment,<br>so the 3D view could not be started.",
       imgPrefix: "Imagery: ", procTex: "Texture: procedurally generated (not actual imagery)",
@@ -3161,7 +3170,7 @@
   // ---------- 地上ビュー用コントロール (画角・方位・高度。ドラッグと双方向同期) ----------
   const gFovInput = document.getElementById("gFov");
   const gFovVal = document.getElementById("gFovVal");
-  const gAzReadout = document.getElementById("gAzReadout");
+  const gNeedle = document.getElementById("gNeedle");
   const gAzDir = document.getElementById("gAzDir");
   const gAltInput = document.getElementById("gAlt");
   const gAltVal = document.getElementById("gAltVal");
@@ -3183,13 +3192,13 @@
       const v = String(Math.round((90 - gFov / DEG) / 0.70));
       if (gFovInput.value !== v) gFovInput.value = v;
     }
-    const fv = Math.round(gFov / DEG) + "°";
+    const fv = "×" + (1 / Math.tan(gFov / 2)).toFixed(1);
     if (fv !== lastGFov) { gFovVal.textContent = fv; lastGFov = fv; }
     const azn = ((gAz / DEG) % 360 + 360) % 360;
     const as = Math.round(azn) + "°";
     if (as !== lastGAz) {
-      gAzReadout.textContent = as;
-      gAzDir.textContent = T().obs.dirs[Math.round(azn / 45) % 8];
+      gNeedle.setAttribute("transform", "rotate(" + Math.round(azn) + ")");
+      gAzDir.textContent = as + " " + T().obs.dirs[Math.round(azn / 45) % 8];
       lastGAz = as;
     }
     if (!gAltActive) {
