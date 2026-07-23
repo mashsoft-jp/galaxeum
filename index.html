@@ -383,6 +383,7 @@
   #infoTabs button:hover { color: var(--text); }
   /* 観測地バー */
   #obsLoc { display: flex; align-items: center; gap: 5px; margin: 0 0 12px; flex-wrap: wrap; font-size: 11px; color: var(--dim); }
+  #obsLoc[hidden] { display: none; }   /* id 指定が [hidden] の display:none を上書きするのを打ち消す */
   #obsCity {
     flex: 1 1 100%; padding: 4px 6px; font-size: 11px; font-family: var(--font-ui);
     color: var(--text); background: rgba(150, 178, 224, 0.08);
