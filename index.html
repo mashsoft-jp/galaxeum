@@ -296,6 +296,34 @@
     gap: 6px;
     flex-wrap: wrap;
   }
+  /* ---- 地上ビュー用コントロールの出し分け ---- */
+  .groundOnly { display: none; }
+  #app.groundMode .spaceOnly { display: none; }
+  #app.groundMode #controls .groundOnly { display: revert; }
+  #gFovVal, #gAzReadout, #gAzDir {
+    font-family: var(--font-num); font-variant-numeric: tabular-nums;
+    font-size: 11.5px; color: var(--text); white-space: nowrap;
+  }
+  #gFovVal { min-width: 88px; text-align: left; }
+  #gAzReadout { text-align: center; }
+  #gAzDir { min-width: 88px; text-align: left; color: var(--dim); }
+  /* 高度の縦スライダー (右端フロート) */
+  #gAltCtrl {
+    position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
+    z-index: 14; flex-direction: column; align-items: center; gap: 6px;
+    padding: 12px 8px; border-radius: 12px;
+    background: rgba(16, 22, 42, 0.72); border: 1px solid var(--line);
+    backdrop-filter: blur(4px);
+  }
+  #app.groundMode #gAltCtrl { display: flex; }
+  #gAltCtrl #gAlt {
+    writing-mode: vertical-lr; direction: rtl;
+    -webkit-appearance: slider-vertical; appearance: slider-vertical;
+    width: 8px; height: 150px; accent-color: var(--accent);
+  }
+  #gAltLabelTop, #gAltVal {
+    font-size: 10.5px; color: var(--dim); font-family: var(--font-num); white-space: nowrap;
+  }
 
   button {
     font-family: var(--font-ui);
@@ -430,6 +458,10 @@
   #skyExit[hidden] { display: none; }
   #skyExit:hover { border-color: var(--accent-dim); }
   #app.groundMode #navPanel, #app.groundMode #navExpand { display: none; }
+  @media (max-width: 720px) {
+    #app.groundMode #title { display: none; }
+    #app.groundMode #skyExit { top: 12px; left: 12px; transform: none; }
+  }
   #info table { width: 100%; border-collapse: collapse; color: var(--text); font-family: var(--font-ui); }
   #info td {
     padding: 4.5px 0;
@@ -660,28 +692,49 @@
     <button id="speedUp" class="step" aria-label="速くする">＋</button>
     <span id="speedVal"></span>
 
-    <span></span>
-    <span class="slider" id="zoomLabel">ズーム</span>
-    <button id="zoomOut" class="step" aria-label="遠ざける">−</button>
-    <input type="range" id="zoom" min="0" max="100" value="40" aria-label="ズーム">
-    <button id="zoomIn" class="step" aria-label="近づける">＋</button>
-    <span id="zoomVal"></span>
+    <span class="spaceOnly"></span>
+    <span class="slider spaceOnly" id="zoomLabel">ズーム</span>
+    <button id="zoomOut" class="step spaceOnly" aria-label="遠ざける">−</button>
+    <input type="range" id="zoom" class="spaceOnly" min="0" max="100" value="40" aria-label="ズーム">
+    <button id="zoomIn" class="step spaceOnly" aria-label="近づける">＋</button>
+    <span id="zoomVal" class="spaceOnly"></span>
 
-    <span></span>
-    <span class="slider" id="angleLabel">角度</span>
-    <button id="angleDown" class="step" aria-label="角度を下げる">−</button>
-    <input type="range" id="angle" min="-87" max="87" value="20" aria-label="カメラ角度">
-    <button id="angleUp" class="step" aria-label="角度を上げる">＋</button>
-    <span id="angleVal"></span>
+    <span class="spaceOnly"></span>
+    <span class="slider spaceOnly" id="angleLabel">角度</span>
+    <button id="angleDown" class="step spaceOnly" aria-label="角度を下げる">−</button>
+    <input type="range" id="angle" class="spaceOnly" min="-87" max="87" value="20" aria-label="カメラ角度">
+    <button id="angleUp" class="step spaceOnly" aria-label="角度を上げる">＋</button>
+    <span id="angleVal" class="spaceOnly"></span>
 
-    <span class="slider" id="cameraLabel">カメラ</span>
-    <div class="camRow">
+    <span class="slider spaceOnly" id="cameraLabel">カメラ</span>
+    <div class="camRow spaceOnly">
       <button id="viewTopBtn">真上</button>
       <button id="viewDefBtn">デフォルト</button>
       <button id="viewSideBtn">真横</button>
       <button id="resetBtn">全体表示</button>
     </div>
+
+    <!-- 地上ビュー用 -->
+    <span class="groundOnly"></span>
+    <span class="slider groundOnly" id="gFovLabel">画角</span>
+    <button id="gFovOut" class="step groundOnly" aria-label="画角を広げる">−</button>
+    <input type="range" id="gFov" class="groundOnly" min="0" max="100" value="43" aria-label="画角">
+    <button id="gFovIn" class="step groundOnly" aria-label="画角を狭める">＋</button>
+    <span id="gFovVal" class="groundOnly"></span>
+
+    <span class="groundOnly"></span>
+    <span class="slider groundOnly" id="gAzLabel">方位</span>
+    <button id="gAzLeft" class="step groundOnly" aria-label="左へ回す">◀</button>
+    <span id="gAzReadout" class="groundOnly"></span>
+    <button id="gAzRight" class="step groundOnly" aria-label="右へ回す">▶</button>
+    <span id="gAzDir" class="groundOnly"></span>
   </footer>
+
+  <div id="gAltCtrl" class="groundOnly">
+    <span id="gAltLabelTop">高度</span>
+    <input type="range" id="gAlt" min="-80" max="90" value="30" aria-label="高度">
+    <span id="gAltVal"></span>
+  </div>
 </div>
 
 <script>
@@ -859,6 +912,7 @@
       orbits: "軌道", labels: "名前", reset: "全体表示",
       nowBtn: "現在時刻に合わせる", paused: "SIMULATION PAUSED", ratePrefix: "1秒 = ",
       viewTop: "真上", viewDef: "デフォルト", viewSide: "真横", camera: "カメラ",
+      gFovLabel: "画角", gAzLabel: "方位", gAltLabel: "高度",
       hint: "ドラッグで回転 ・ ホイール / ピンチでズーム ・ 天体クリックで接近",
       noGL: "お使いの環境では WebGL が利用できないため、<br>3D 表示を開始できませんでした。",
       imgPrefix: "画像: ", procTex: "テクスチャ: シェーダによる生成 (実写ではありません)",
@@ -892,6 +946,7 @@
       orbits: "Orbits", labels: "Labels", reset: "Overview",
       nowBtn: "Set to current time", paused: "SIMULATION PAUSED", ratePrefix: "1s = ",
       viewTop: "Top", viewDef: "Default", viewSide: "Side", camera: "Camera",
+      gFovLabel: "FOV", gAzLabel: "Azimuth", gAltLabel: "Alt",
       hint: "Drag to rotate · Wheel / pinch to zoom · Click a body to approach",
       noGL: "WebGL is not available in this environment,<br>so the 3D view could not be started.",
       imgPrefix: "Imagery: ", procTex: "Texture: procedurally generated (not actual imagery)",
@@ -2473,6 +2528,7 @@
     updateZoomUI();
     updateAngleUI();
     updateObs();
+    updateGroundUI();
     if (now - lastSettingsSave > 2000) {
       lastSettingsSave = now;
       saveSettings();
@@ -3102,6 +3158,48 @@
   bindHold(document.getElementById("angleDown"), () => stepAngle(-1));
   bindHold(document.getElementById("angleUp"), () => stepAngle(1));
 
+  // ---------- 地上ビュー用コントロール (画角・方位・高度。ドラッグと双方向同期) ----------
+  const gFovInput = document.getElementById("gFov");
+  const gFovVal = document.getElementById("gFovVal");
+  const gAzReadout = document.getElementById("gAzReadout");
+  const gAzDir = document.getElementById("gAzDir");
+  const gAltInput = document.getElementById("gAlt");
+  const gAltVal = document.getElementById("gAltVal");
+  let gFovActive = false, gAltActive = false;
+  let lastGFov = "", lastGAz = "", lastGAlt = "";
+  gFovInput.addEventListener("input", () => { gFov = (90 - 0.70 * gFovInput.value) * DEG; });
+  gFovInput.addEventListener("pointerdown", () => { gFovActive = true; });
+  gAltInput.addEventListener("input", () => { gAlt = gAltInput.value * DEG; });
+  gAltInput.addEventListener("pointerdown", () => { gAltActive = true; });
+  window.addEventListener("pointerup", () => { gFovActive = false; gAltActive = false; });
+  const stepFov = (dir) => { gFov = Math.max(20 * DEG, Math.min(90 * DEG, gFov + dir * 5 * DEG)); };
+  bindHold(document.getElementById("gFovOut"), () => stepFov(1));    // − = 広げる
+  bindHold(document.getElementById("gFovIn"), () => stepFov(-1));    // ＋ = 狭める (ズームイン)
+  bindHold(document.getElementById("gAzLeft"), () => { gAz -= 15 * DEG; });
+  bindHold(document.getElementById("gAzRight"), () => { gAz += 15 * DEG; });
+  function updateGroundUI() {
+    if (!groundView) return;
+    if (!gFovActive) {
+      const v = String(Math.round((90 - gFov / DEG) / 0.70));
+      if (gFovInput.value !== v) gFovInput.value = v;
+    }
+    const fv = Math.round(gFov / DEG) + "°";
+    if (fv !== lastGFov) { gFovVal.textContent = fv; lastGFov = fv; }
+    const azn = ((gAz / DEG) % 360 + 360) % 360;
+    const as = Math.round(azn) + "°";
+    if (as !== lastGAz) {
+      gAzReadout.textContent = as;
+      gAzDir.textContent = T().obs.dirs[Math.round(azn / 45) % 8];
+      lastGAz = as;
+    }
+    if (!gAltActive) {
+      const v = String(Math.round(gAlt / DEG));
+      if (gAltInput.value !== v) gAltInput.value = v;
+    }
+    const av = Math.round(gAlt / DEG) + "°";
+    if (av !== lastGAlt) { gAltVal.textContent = av; lastGAlt = av; }
+  }
+
   // ---------- 操作パネル設定の保存 (速度・ズーム・角度) ----------
   function saveSettings() {
     try {
@@ -3368,6 +3466,10 @@
     document.getElementById("viewTopBtn").textContent = t.viewTop;
     document.getElementById("viewDefBtn").textContent = t.viewDef;
     document.getElementById("viewSideBtn").textContent = t.viewSide;
+    document.getElementById("gFovLabel").textContent = t.gFovLabel;
+    document.getElementById("gAzLabel").textContent = t.gAzLabel;
+    document.getElementById("gAltLabelTop").textContent = t.gAltLabel;
+    lastGAz = "";   // 方角ラベルを言語に合わせて再描画
     document.getElementById("nowBtn").textContent = t.nowBtn;
     menuLangBtn.textContent = t.menuLang;
     menuShareBtn.textContent = t.menuShare;
