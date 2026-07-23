@@ -305,11 +305,32 @@
     font-size: 11.5px; color: var(--text); white-space: nowrap;
   }
   #gFovVal { min-width: 88px; text-align: left; }
-  /* 方位 (操作パネル内: ◀ コンパス ▶ + 方角表示) */
+  /* 方位 (操作パネル内: ◀ 目盛りテープ ▶ + 方角表示) */
   #gAzDir { min-width: 88px; text-align: left; color: var(--dim); }
-  #gCompass { width: 46px; height: 46px; justify-self: center; }
-  #gCompass .cpt { fill: var(--dim); font-size: 9px; font-family: var(--font-ui); text-anchor: middle; dominant-baseline: middle; }
-  #gCompass .cpn { fill: #e8785f; }
+  #gAzTape { width: 100%; height: 32px; }   /* display は .groundOnly の出し分けに任せる */
+  #gAzTape .tapetxt { fill: var(--dim); font-size: 10px; font-family: var(--font-ui); text-anchor: middle; }
+  #gAzTape .tapen { fill: #e8785f; }
+  /* 宇宙/地上のビュー切替 (画面上部中央) */
+  #viewMode {
+    position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+    z-index: 15; display: flex; gap: 3px; padding: 4px;
+    background: rgba(16, 22, 42, 0.82); border: 1px solid var(--line);
+    border-radius: 20px; backdrop-filter: blur(4px);
+  }
+  #viewMode button {
+    padding: 5px 16px; font-size: 12px; letter-spacing: 0.08em;
+    color: var(--dim); background: none; border: none; border-radius: 14px;
+  }
+  #viewMode button:hover { color: var(--text); background: rgba(150, 178, 224, 0.10); }
+  #viewMode button.on { color: #0a0d16; background: var(--accent); font-weight: 600; }
+  /* 縦持ちスマホ: 上部はタイトルと時計が占めるためその下へ */
+  @media (max-width: 720px) {
+    #viewMode { top: 62px; }
+    #viewMode button { padding: 4px 13px; font-size: 11px; }
+  }
+  @media (max-height: 480px) {
+    #viewMode { top: 8px; }
+  }
   /* 高度の縦スライダー (右端フロート) */
   #gAltCtrl {
     position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
@@ -534,9 +555,9 @@
     #info.open { transform: none; }
     #hint { display: none; }
     #menu { top: 60px; }
-    #navPanel { top: 60px; max-height: 40vh; max-height: 40dvh; }
+    #navPanel { top: 100px; max-height: 40vh; max-height: 40dvh; }
     #masterToggles button { padding: 3px 9px; font-size: 10px; }
-    #navExpand { top: 60px; }
+    #navExpand { top: 100px; }
     #nav { gap: 3px; }
     #nav button { padding: 4px 9px; font-size: 10px; }
     #controls {
@@ -603,6 +624,11 @@
     <button id="menuBtn" aria-label="メニュー" aria-haspopup="true">☰</button>
     <h1>GALAXEUM</h1>
   </header>
+
+  <div id="viewMode" role="group" aria-label="ビュー切替">
+    <button id="vmSpace" class="on">宇宙</button>
+    <button id="vmGround">地上</button>
+  </div>
 
   <div id="menu" class="hud" role="menu">
     <button id="menuLang" role="menuitem"></button>
@@ -682,13 +708,12 @@
     <button id="angleUp" class="step spaceOnly" aria-label="角度を上げる">＋</button>
     <span id="angleVal" class="spaceOnly"></span>
 
-    <span class="slider" id="cameraLabel">カメラ</span>
-    <div class="camRow">
+    <span class="slider spaceOnly" id="cameraLabel">カメラ</span>
+    <div class="camRow spaceOnly">
       <button id="viewTopBtn">真上</button>
       <button id="viewDefBtn">デフォルト</button>
       <button id="viewSideBtn">真横</button>
       <button id="resetBtn">全体表示</button>
-      <button id="viewGroundBtn">地上</button>
     </div>
 
     <!-- 地上ビュー用 -->
@@ -702,14 +727,7 @@
     <span class="groundOnly"></span>
     <span class="slider groundOnly" id="gAzLabel">方位</span>
     <button id="gAzLeft" class="step groundOnly" aria-label="左へ回す">◀</button>
-    <svg id="gCompass" class="groundOnly" viewBox="-26 -26 52 52" aria-hidden="true">
-      <circle cx="0" cy="0" r="22" fill="none" stroke="var(--line)" stroke-width="1.5"/>
-      <text class="cpt cpn" x="0" y="-13">N</text>
-      <text class="cpt" x="15" y="5">E</text>
-      <text class="cpt" x="0" y="19">S</text>
-      <text class="cpt" x="-15" y="5">W</text>
-      <polygon id="gNeedle" points="0,-17 -3.5,3 0,-1 3.5,3" fill="var(--accent)"/>
-    </svg>
+    <svg id="gAzTape" class="groundOnly" viewBox="-90 -22 180 36" aria-hidden="true"></svg>
     <button id="gAzRight" class="step groundOnly" aria-label="右へ回す">▶</button>
     <span id="gAzDir" class="groundOnly"></span>
   </footer>
@@ -896,7 +914,7 @@
       orbits: "軌道", labels: "名前", reset: "全体表示",
       nowBtn: "現在時刻に合わせる", paused: "SIMULATION PAUSED", ratePrefix: "1秒 = ",
       viewTop: "真上", viewDef: "デフォルト", viewSide: "真横", camera: "カメラ",
-      viewGround: "地上", gFovLabel: "ズーム", gAzLabel: "方位", gAltLabel: "高度",
+      viewSpace: "宇宙", viewGround: "地上", gFovLabel: "ズーム", gAzLabel: "方位", gAltLabel: "高度",
       hint: "ドラッグで回転 ・ ホイール / ピンチでズーム ・ 天体クリックで接近",
       noGL: "お使いの環境では WebGL が利用できないため、<br>3D 表示を開始できませんでした。",
       imgPrefix: "画像: ", procTex: "テクスチャ: シェーダによる生成 (実写ではありません)",
@@ -929,7 +947,7 @@
       orbits: "Orbits", labels: "Labels", reset: "Overview",
       nowBtn: "Set to current time", paused: "SIMULATION PAUSED", ratePrefix: "1s = ",
       viewTop: "Top", viewDef: "Default", viewSide: "Side", camera: "Camera",
-      viewGround: "Ground", gFovLabel: "Zoom", gAzLabel: "Azimuth", gAltLabel: "Alt",
+      viewSpace: "Space", viewGround: "Ground", gFovLabel: "Zoom", gAzLabel: "Azimuth", gAltLabel: "Alt",
       hint: "Drag to rotate · Wheel / pinch to zoom · Click a body to approach",
       noGL: "WebGL is not available in this environment,<br>so the 3D view could not be started.",
       imgPrefix: "Imagery: ", procTex: "Texture: procedurally generated (not actual imagery)",
@@ -2005,8 +2023,9 @@
       octx.fillText(bName(v.b), s.x, s.y - 11);
     }
   }
-  // 地上ビューはカメラ視点の一つとして扱う (カメラ行の「地上」ボタンで出入り)
-  const viewGroundBtn = document.getElementById("viewGroundBtn");
+  // 宇宙/地上のビュー切替 (画面上部のトグル)
+  const vmSpaceBtn = document.getElementById("vmSpace");
+  const vmGroundBtn = document.getElementById("vmGround");
   // 指定天体の方向へ地上カメラを向ける (地平線下なら下向きにして必ず視野へ)
   function aimGroundAt(body) {
     if (!body || body.key === "earth") return false;
@@ -2015,20 +2034,25 @@
     gAlt = Math.max(-1.3, Math.min(1.4, c.alt * DEG));
     return true;
   }
+  function syncViewModeUI() {
+    vmSpaceBtn.classList.toggle("on", !groundView);
+    vmGroundBtn.classList.toggle("on", groundView);
+  }
   function enterGround() {
     if (groundView) return;
     if (!aimGroundAt(selected || currentInfoBody)) { gAz = Math.PI; gAlt = 0.4; }
     groundView = true;
     document.getElementById("app").classList.add("groundMode");
-    viewGroundBtn.classList.add("on");
+    syncViewModeUI();
     infoPanel.classList.remove("open");
   }
   function exitGround() {
     groundView = false;
     document.getElementById("app").classList.remove("groundMode");
-    viewGroundBtn.classList.remove("on");
+    syncViewModeUI();
   }
-  viewGroundBtn.addEventListener("click", enterGround);
+  vmGroundBtn.addEventListener("click", enterGround);
+  vmSpaceBtn.addEventListener("click", exitGround);
   function hitTestGround(px, py) {
     let best = null, bd = 30 * 30;
     for (const v of groundVis) {
@@ -3197,8 +3221,26 @@
   // ---------- 地上ビュー用コントロール (画角・方位・高度。ドラッグと双方向同期) ----------
   const gFovInput = document.getElementById("gFov");
   const gFovVal = document.getElementById("gFovVal");
-  const gNeedle = document.getElementById("gNeedle");
+  const gAzTape = document.getElementById("gAzTape");
   const gAzDir = document.getElementById("gAzDir");
+  // 方位の目盛りテープ (中央 = 現在の向き。15°刻み、45°ごとに方角ラベル)
+  function buildAzTape(az) {
+    const dirs = T().obs.dirs;
+    const half = 50, px = 88 / half;               // 表示範囲 ±50° → viewBox 半幅 88
+    let s = '<line x1="-88" y1="0" x2="88" y2="0" stroke="rgba(150,178,224,0.25)" stroke-width="1"/>';
+    for (let k = Math.ceil((az - half) / 15) * 15; k <= az + half; k += 15) {
+      const x = ((k - az) * px).toFixed(1);
+      const major = ((k % 45) + 45) % 45 === 0;
+      s += '<line x1="' + x + '" y1="' + (major ? -9 : -5) + '" x2="' + x +
+           '" y2="0" stroke="rgba(150,178,224,' + (major ? "0.6" : "0.35") + ')" stroke-width="1"/>';
+      if (major) {
+        const idx = (((k % 360) + 360) % 360) / 45;
+        s += '<text x="' + x + '" y="12" class="tapetxt' + (idx === 0 ? " tapen" : "") + '">' + dirs[idx] + "</text>";
+      }
+    }
+    s += '<polygon points="0,-12 -3.5,-19 3.5,-19" fill="var(--accent)"/>';   // 中央マーカー
+    return s;
+  }
   const gAltInput = document.getElementById("gAlt");
   const gAltVal = document.getElementById("gAltVal");
   let gFovActive = false, gAltActive = false;
@@ -3226,7 +3268,7 @@
     const azn = ((gAz / DEG) % 360 + 360) % 360;
     const as = Math.round(azn) + "°";
     if (as !== lastGAz) {
-      gNeedle.setAttribute("transform", "rotate(" + Math.round(azn) + ")");
+      gAzTape.innerHTML = buildAzTape(azn);
       gAzDir.textContent = as + " " + T().obs.dirs[Math.round(azn / 45) % 8];
       lastGAz = as;
     }
@@ -3507,11 +3549,12 @@
     document.getElementById("viewTopBtn").textContent = t.viewTop;
     document.getElementById("viewDefBtn").textContent = t.viewDef;
     document.getElementById("viewSideBtn").textContent = t.viewSide;
-    viewGroundBtn.textContent = t.viewGround;
+    vmSpaceBtn.textContent = t.viewSpace;
+    vmGroundBtn.textContent = t.viewGround;
     document.getElementById("gFovLabel").textContent = t.gFovLabel;
     document.getElementById("gAzLabel").textContent = t.gAzLabel;
     document.getElementById("gAltLabelTop").textContent = t.gAltLabel;
-    lastGAz = "";   // 方角ラベルを言語に合わせて再描画
+    lastGAz = "";   // 方位テープの方角ラベルを言語に合わせて再描画
     document.getElementById("nowBtn").textContent = t.nowBtn;
     menuLangBtn.textContent = t.menuLang;
     menuShareBtn.textContent = t.menuShare;
