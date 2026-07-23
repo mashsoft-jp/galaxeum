@@ -410,6 +410,26 @@
     background: none; border: 1px solid var(--line); border-radius: 3px; cursor: pointer;
   }
   #obsGeo:hover { color: var(--text); }
+  /* 空を見上げる (地上ビュー入口) */
+  #skyEnter {
+    display: block; width: 100%; margin: 12px 0 0; padding: 8px;
+    font-size: 12px; letter-spacing: 0.06em; color: var(--accent);
+    background: rgba(242, 178, 62, 0.10); border: 1px solid var(--accent-dim);
+    border-radius: 5px; cursor: pointer; transition: background 0.15s;
+  }
+  #skyEnter[hidden] { display: none; }
+  #skyEnter:hover { background: rgba(242, 178, 62, 0.18); }
+  /* 地上ビューを出る */
+  #skyExit {
+    position: absolute; top: 16px; left: 50%; transform: translateX(-50%);
+    z-index: 15; padding: 7px 16px; font-size: 12px; letter-spacing: 0.06em;
+    color: var(--text); background: rgba(16, 22, 42, 0.82);
+    border: 1px solid var(--line); border-radius: 20px; cursor: pointer;
+    backdrop-filter: blur(4px);
+  }
+  #skyExit[hidden] { display: none; }
+  #skyExit:hover { border-color: var(--accent-dim); }
+  #app.groundMode #navPanel, #app.groundMode #navExpand { display: none; }
   #info table { width: 100%; border-collapse: collapse; color: var(--text); font-family: var(--font-ui); }
   #info td {
     padding: 4.5px 0;
@@ -624,8 +644,11 @@
     </div>
     <table><tbody id="infoRows"></tbody></table>
     <p class="fact" id="infoFact"></p>
+    <button id="skyEnter" hidden></button>
     <p class="credit" id="infoCredit"></p>
   </aside>
+
+  <button id="skyExit" hidden></button>
 
   <div id="hint">ドラッグで回転 ・ ホイール / ピンチでズーム ・ 天体クリックで接近</div>
 
@@ -852,6 +875,7 @@
         tabFacts: "基本情報", tabObs: "地球から見る",
         loc: "観測地", geo: "現在地", custom: "カスタム",
         N: "北", S: "南", E: "東", W: "西",
+        skyEnter: "空を見上げる (3D)", skyExit: "宇宙ビューに戻る",
         az: "方位", alt: "高度", rise: "出", transit: "南中", set: "入",
         mag: "視等級", phase: "満ち欠け", size: "見かけの大きさ", elong: "太陽離角", dist: "地球からの距離",
         below: "地平線下", noRise: "昇らない", noSet: "沈まない", always: "沈まない",
@@ -884,6 +908,7 @@
         tabFacts: "Facts", tabObs: "From Earth",
         loc: "Site", geo: "My location", custom: "Custom",
         N: "N", S: "S", E: "E", W: "W",
+        skyEnter: "Look up at the sky (3D)", skyExit: "Back to space view",
         az: "Azimuth", alt: "Altitude", rise: "Rise", transit: "Transit", set: "Set",
         mag: "Magnitude", phase: "Illumination", size: "Apparent size", elong: "Elongation", dist: "Distance from Earth",
         below: "below horizon", noRise: "never rises", noSet: "never sets", always: "never sets",
@@ -1721,7 +1746,161 @@
     return { x: (x / cw * 0.5 + 0.5) * W, y: (1 - (y / cw * 0.5 + 0.5)) * H, w: cw };
   }
 
+  // ---------- 地上ビュー (地球から空を見上げる) ----------
+  let groundView = false;
+  let gAz = 0, gAlt = 0.45, gFov = 60 * DEG;   // 視線方位・高度 (rad)・画角
+  const _fwd = [0, 0, 0], _gp = [0, 0, 0], gVP = mIdent();
+  let groundVB = null, groundPtVB = null, horizonVB = null, horizonN = 0;
+  const SKY_BODIES = [SUN, MOON].concat(
+    PLANETS.filter((p) => ["mercury", "venus", "mars", "jupiter", "saturn", "uranus", "neptune"].includes(p.key)));
+  const groundPtArr = new Float32Array(SKY_BODIES.length * 7);
+  function azAltDir(azDeg, altDeg, out) {
+    const a = azDeg * DEG, e = altDeg * DEG, ca = Math.cos(e);
+    out[0] = ca * Math.sin(a); out[1] = Math.sin(e); out[2] = -ca * Math.cos(a);
+    return out;
+  }
+  function projGround(p) {
+    const w = gVP[3]*p[0] + gVP[7]*p[1] + gVP[11]*p[2] + gVP[15];
+    if (w <= 0.01) return null;
+    const x = gVP[0]*p[0] + gVP[4]*p[1] + gVP[8]*p[2] + gVP[12];
+    const y = gVP[1]*p[0] + gVP[5]*p[1] + gVP[9]*p[2] + gVP[13];
+    return { x: (x/w*0.5+0.5)*W, y: (1-(y/w*0.5+0.5))*H };
+  }
+  const magSize = (m) => Math.max(1.6, Math.min(9, 6 - m * 1.2));
+  const SKYR = 100;
+  const groundVis = [];
+  function renderGround() {
+    if (!groundVB) {
+      const GR = 600;
+      groundVB = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, groundVB);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+        -GR,0,-GR, GR,0,-GR, GR,0,GR, -GR,0,-GR, GR,0,GR, -GR,0,GR]), gl.STATIC_DRAW);
+      groundPtVB = gl.createBuffer();
+      // 水平線リング (alt=0 の大円)
+      const HN = 128, hr = [];
+      for (let i = 0; i <= HN; i++) { azAltDir(i / HN * 360, 0, _gp); hr.push(_gp[0]*SKYR, _gp[1]*SKYR, _gp[2]*SKYR); }
+      horizonVB = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, horizonVB);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(hr), gl.STATIC_DRAW);
+      horizonN = HN + 1;
+    }
+    const ca = Math.cos(gAlt);
+    _fwd[0] = ca*Math.sin(gAz); _fwd[1] = Math.sin(gAlt); _fwd[2] = -ca*Math.cos(gAz);
+    mLookAt(ZERO3, _fwd, UP3, Vm);
+    mPersp(gFov, W / H, 0.05, 2000, SCR.P);
+    mMul(SCR.P, Vm, gVP);
+
+    gl.clearColor(0.015, 0.02, 0.045, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    gl.disable(gl.DEPTH_TEST); gl.depthMask(false); gl.disable(gl.BLEND);
+
+    // 地面 (y=0 平面。カメラは原点なので下半分を覆う)
+    gl.useProgram(lineP.pr);
+    gl.uniformMatrix4fv(lineP.u.uVP, false, gVP);
+    gl.uniform4f(lineP.u.uColor, 0.07, 0.075, 0.085, 1);
+    gl.bindBuffer(gl.ARRAY_BUFFER, groundVB);
+    gl.enableVertexAttribArray(lineP.a.aPos);
+    gl.vertexAttribPointer(lineP.a.aPos, 3, gl.FLOAT, false, 0, 0);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+    // 水平線
+    gl.uniform4f(lineP.u.uColor, 0.30, 0.38, 0.52, 1);
+    gl.bindBuffer(gl.ARRAY_BUFFER, horizonVB);
+    gl.vertexAttribPointer(lineP.a.aPos, 3, gl.FLOAT, false, 0, 0);
+    gl.drawArrays(gl.LINE_STRIP, 0, horizonN);
+
+    // 天体 (地平線より上のみ) を点で配置
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    groundVis.length = 0;
+    let n = 0;
+    for (const b of SKY_BODIES) {
+      const c = computeObs(b);
+      if (c.alt < -1) continue;
+      azAltDir(c.az, c.alt, _gp);
+      const px = _gp[0]*SKYR, py = _gp[1]*SKYR, pz = _gp[2]*SKYR;
+      let size, r, g, bl;
+      if (b === SUN) { size = 18; r = 1.0; g = 0.9; bl = 0.6; }
+      else if (b.key === "moon") { size = 11; r = 0.9; g = 0.92; bl = 0.96; }
+      else { size = magSize(c.mag == null ? 3 : c.mag); r = b.colA[0]*0.5+0.5; g = b.colA[1]*0.5+0.5; bl = b.colA[2]*0.5+0.5; }
+      const o = n * 7;
+      groundPtArr[o]=px; groundPtArr[o+1]=py; groundPtArr[o+2]=pz;
+      groundPtArr[o+3]=size; groundPtArr[o+4]=r; groundPtArr[o+5]=g; groundPtArr[o+6]=bl;
+      n++;
+      groundVis.push({ b, px, py, pz });
+    }
+    if (n) {
+      gl.useProgram(pointP.pr);
+      gl.uniformMatrix4fv(pointP.u.uVP, false, gVP);
+      gl.uniform1f(pointP.u.uScale, DPR);
+      gl.uniform1f(pointP.u.uAlpha, 1.0);
+      gl.bindBuffer(gl.ARRAY_BUFFER, groundPtVB);
+      gl.bufferData(gl.ARRAY_BUFFER, groundPtArr, gl.DYNAMIC_DRAW);
+      gl.enableVertexAttribArray(pointP.a.aPos);
+      gl.enableVertexAttribArray(pointP.a.aSize);
+      gl.enableVertexAttribArray(pointP.a.aCol);
+      gl.vertexAttribPointer(pointP.a.aPos, 3, gl.FLOAT, false, 28, 0);
+      gl.vertexAttribPointer(pointP.a.aSize, 1, gl.FLOAT, false, 28, 12);
+      gl.vertexAttribPointer(pointP.a.aCol, 3, gl.FLOAT, false, 28, 16);
+      gl.drawArrays(gl.POINTS, 0, n);
+    }
+    gl.depthMask(true); gl.disable(gl.BLEND);
+    drawGroundOverlay();
+  }
+  function drawGroundOverlay() {
+    octx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    octx.clearRect(0, 0, W, H);
+    octx.textAlign = "center";
+    octx.font = '12px "Avenir Next","Hiragino Sans",sans-serif';
+    const o = T().obs;
+    octx.fillStyle = "rgba(150,178,224,0.55)";
+    for (const [az, lab] of [[0, o.N], [90, o.E], [180, o.S], [270, o.W]]) {
+      azAltDir(az, 0, _gp);
+      const s = projGround([_gp[0]*SKYR, _gp[1]*SKYR, _gp[2]*SKYR]);
+      if (s && s.x >= 0 && s.x <= W && s.y >= 0 && s.y <= H) octx.fillText(lab, s.x, s.y - 4);
+    }
+    octx.font = '11px "Avenir Next","Hiragino Sans",sans-serif';
+    for (const v of groundVis) {
+      const s = projGround([v.px, v.py, v.pz]);
+      if (!s || s.x < -30 || s.x > W + 30) continue;
+      octx.fillStyle = v.b === selected ? "rgba(242,178,62,0.95)" : "rgba(201,213,234,0.82)";
+      octx.fillText(bName(v.b), s.x, s.y - 11);
+    }
+  }
+  const skyEnterBtn = document.getElementById("skyEnter");
+  const skyExitBtn = document.getElementById("skyExit");
+  function enterGround() {
+    if (currentInfoBody && currentInfoBody.key !== "earth") {
+      const c = computeObs(currentInfoBody);
+      gAz = c.az * DEG;
+      gAlt = Math.max(0.05, Math.min(1.4, c.alt * DEG));
+    } else { gAz = Math.PI; gAlt = 0.4; }
+    groundView = true;
+    document.getElementById("app").classList.add("groundMode");
+    skyExitBtn.textContent = T().obs.skyExit;
+    skyExitBtn.hidden = false;
+    infoPanel.classList.remove("open");
+  }
+  function exitGround() {
+    groundView = false;
+    document.getElementById("app").classList.remove("groundMode");
+    skyExitBtn.hidden = true;
+  }
+  skyEnterBtn.addEventListener("click", enterGround);
+  skyExitBtn.addEventListener("click", exitGround);
+  function hitTestGround(px, py) {
+    let best = null, bd = 30 * 30;
+    for (const v of groundVis) {
+      const s = projGround([v.px, v.py, v.pz]);
+      if (!s) continue;
+      const dx = s.x - px, dy = s.y - py, d = dx*dx + dy*dy;
+      if (d < bd) { bd = d; best = v.b; }
+    }
+    return best;
+  }
+
   function render(nowSec) {
+    if (groundView) { renderGround(); return; }
     // --- カメラ ---
     const eye = [
       cam.focus[0] + cam.dist * Math.cos(cam.pitch) * Math.cos(cam.yaw),
@@ -2454,9 +2633,12 @@
       document.getElementById("infoRows").innerHTML = r.rows;
       document.getElementById("infoFact").textContent = r.fact;
       credEl.textContent = body.key === "earth" ? "" : t.obs.note;
+      skyEnterBtn.textContent = t.obs.skyEnter;
+      skyEnterBtn.hidden = body.key === "earth";
       lastObsStr = r.rows;
     } else {
       obsLocEl.hidden = true;
+      skyEnterBtn.hidden = true;
       const d = lang === "en" ? EN_DATA[body.key] : null;
       document.getElementById("infoRows").innerHTML =
         (d ? d.rows : body.rows).map(([kk, v]) => `<tr><td>${kk}</td><td>${v}</td></tr>`).join("");
@@ -2686,14 +2868,23 @@
     dragMoved += Math.abs(dx) + Math.abs(dy);
 
     if (pointers.size === 1) {
-      cam.yaw += dx * 0.005;
-      cam.pitch = Math.max(-1.45, Math.min(1.45, cam.pitch + dy * 0.005));
-      cam.yawTgt = cam.yaw;
-      cam.pitchTgt = cam.pitch;
+      if (groundView) {
+        gAz += dx * 0.004;
+        gAlt = Math.max(-1.4, Math.min(1.4, gAlt - dy * 0.004));
+      } else {
+        cam.yaw += dx * 0.005;
+        cam.pitch = Math.max(-1.45, Math.min(1.45, cam.pitch + dy * 0.005));
+        cam.yawTgt = cam.yaw;
+        cam.pitchTgt = cam.pitch;
+      }
     } else if (pointers.size === 2) {
       const [a, b] = [...pointers.values()];
       const d = Math.hypot(a.x - b.x, a.y - b.y);
-      if (pinchDist > 0) cam.distTgt = Math.max(minDist(), Math.min(1400, cam.distTgt * pinchDist / d));
+      if (groundView) {
+        if (pinchDist > 0) gFov = Math.max(20 * DEG, Math.min(90 * DEG, gFov * pinchDist / d));
+      } else if (pinchDist > 0) {
+        cam.distTgt = Math.max(minDist(), Math.min(1400, cam.distTgt * pinchDist / d));
+      }
       pinchDist = d;
     }
     if (dragMoved > 3) hideHint();
@@ -2701,9 +2892,14 @@
 
   function endPointer(e) {
     if (pointers.has(e.pointerId) && dragMoved < 5 && pointers.size === 1) {
-      const hit = hitTest(e.clientX, e.clientY);
-      if (hit) select(hit, true);
-      else select(null, false);
+      if (groundView) {
+        const hit = hitTestGround(e.clientX, e.clientY);
+        if (hit) select(hit, false);
+      } else {
+        const hit = hitTest(e.clientX, e.clientY);
+        if (hit) select(hit, true);
+        else select(null, false);
+      }
     }
     pointers.delete(e.pointerId);
     pinchDist = 0;
@@ -2714,7 +2910,11 @@
 
   glc.addEventListener("wheel", (e) => {
     e.preventDefault();
-    cam.distTgt = Math.max(minDist(), Math.min(1400, cam.distTgt * Math.exp(e.deltaY * 0.0016)));
+    if (groundView) {
+      gFov = Math.max(20 * DEG, Math.min(90 * DEG, gFov * Math.exp(e.deltaY * 0.0012)));
+    } else {
+      cam.distTgt = Math.max(minDist(), Math.min(1400, cam.distTgt * Math.exp(e.deltaY * 0.0016)));
+    }
     hideHint();
   }, { passive: false });
 
