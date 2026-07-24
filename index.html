@@ -1847,9 +1847,11 @@
   const gVP = mIdent(new Float64Array(16)), gVP32 = new Float32Array(16);
   const gP64 = new Float64Array(16), gV64 = new Float64Array(16), gM64 = new Float64Array(16);
   let groundVB = null, groundPtVB = null, horizonVB = null, horizonN = 0;
-  // 地上ビューに出す天体: 太陽・月・全惑星 (準惑星・小惑星・彗星含む)。
-  // 他の衛星は低倍率では母惑星の点と重なるため除外
-  const SKY_BODIES = [SUN, MOON].concat(PLANETS.filter((p) => p.key !== "earth"));
+  // 地上ビューに出す天体: 太陽・月・全惑星 (準惑星・小惑星・彗星含む) と全衛星。
+  // 地球以外の衛星は、画面上で母惑星から分離できる倍率になったら現れる
+  const SKY_BODIES = [SUN, MOON]
+    .concat(PLANETS.filter((p) => p.key !== "earth"))
+    .concat(SATELLITES.filter((s) => s.key !== "moon"));
   const groundPtArr = new Float32Array(SKY_BODIES.length * 7);
   function azAltDir(azDeg, altDeg, out) {
     const a = azDeg * DEG, e = altDeg * DEG, ca = Math.cos(e);
@@ -1956,11 +1958,20 @@
     for (const b of SKY_BODIES) {
       const c = computeObs(b);
       if (c.alt < -1 && b !== selected) continue;   // 選択天体は地平線下でも描画
+      const angR = Math.asin(Math.min(0.9, b.rkm / (c.distAU * AU_KM)));
+      const spherePx = angR / halfFov * halfH;
+      // 地球以外の衛星は、画面上で母惑星の点に埋もれている間は省略
+      // (拡大して分離できる倍率になると現れる = 双眼鏡でガリレオ衛星が見える感覚)
+      if (b.parent && b.parent !== "earth" && b !== selected && spherePx < 5) {
+        const pc = computeObs(BODY_BY_KEY.get(b.parent));
+        const dAz = ((c.az - pc.az + 540) % 360) - 180;
+        const sepPx = Math.hypot(dAz * Math.cos(c.alt * DEG), c.alt - pc.alt) * DEG / gFov * H;
+        if (sepPx < 12) continue;
+      }
       azAltDir(c.az, c.alt, _gp);
       const px = _gp[0]*SKYR, py = _gp[1]*SKYR, pz = _gp[2]*SKYR;
       groundVis.push({ b, px, py, pz });
-      const angR = Math.asin(Math.min(0.9, b.rkm / (c.distAU * AU_KM)));
-      if (angR / halfFov * halfH >= 5) {            // 画面上で十分大きい → 球
+      if (spherePx >= 5) {                          // 画面上で十分大きい → 球
         bigBodies.push({ b, dx: _gp[0], dy: _gp[1], dz: _gp[2], px, py, pz, wr: SKYR * Math.tan(angR) });
         continue;
       }
