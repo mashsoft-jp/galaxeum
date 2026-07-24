@@ -454,9 +454,33 @@
   }
   #infoTabs button.on { color: var(--accent); border-color: var(--accent-dim); }
   #infoTabs button:hover { color: var(--text); }
-  /* 観測地バー */
-  #obsLoc { display: flex; align-items: center; gap: 5px; margin: 0 0 12px; flex-wrap: wrap; font-size: 11px; color: var(--dim); }
-  #obsLoc[hidden] { display: none; }   /* id 指定が [hidden] の display:none を上書きするのを打ち消す */
+  /* ---- 観測地 (地上ビューのチップ + ポップオーバー) ---- */
+  #obsSiteWrap {
+    position: absolute; top: 52px; left: 50%; transform: translateX(-50%);
+    z-index: 15; display: none; flex-direction: column; align-items: center;
+  }
+  #app.groundMode #obsSiteWrap { display: flex; }
+  #obsSiteChip {
+    padding: 3px 14px; font-size: 11px; letter-spacing: 0.04em;
+    color: var(--dim); background: rgba(16, 22, 42, 0.72);
+    border: 1px solid var(--line); border-radius: 12px; backdrop-filter: blur(4px);
+    white-space: nowrap;
+  }
+  #obsSiteChip:hover { color: var(--text); }
+  #obsSitePop {
+    margin-top: 6px; padding: 10px 12px; width: 236px;
+    background: rgba(16, 22, 42, 0.9); border: 1px solid var(--line);
+    border-radius: 10px; backdrop-filter: blur(6px);
+  }
+  #obsSitePop[hidden] { display: none; }
+  #obsLoc { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; font-size: 11px; color: var(--dim); }
+  /* チップ位置のレイアウト別調整 (基本ルールより後に置いて優先させる) */
+  @media (max-width: 720px) {
+    #obsSiteWrap { top: 100px; }
+  }
+  @media (max-height: 480px) {
+    #obsSiteWrap { top: 42px; }
+  }
   #obsCity {
     flex: 1 1 100%; padding: 4px 6px; font-size: 11px; font-family: var(--font-ui);
     color: var(--text); background: rgba(150, 178, 224, 0.08);
@@ -664,6 +688,24 @@
     <button id="vmGround">地上</button>
   </div>
 
+  <div id="obsSiteWrap">
+    <button id="obsSiteChip" aria-haspopup="true" aria-expanded="false">📍</button>
+    <div id="obsSitePop" hidden>
+      <div id="obsLoc">
+        <select id="obsCity" aria-label="都市"></select>
+        <span class="obsField">
+          <input id="obsLat" type="number" step="0.1" min="0" max="90" aria-label="緯度">
+          <button id="obsNS" class="obsHemi" type="button"></button>
+        </span>
+        <span class="obsField">
+          <input id="obsLon" type="number" step="0.1" min="0" max="180" aria-label="経度">
+          <button id="obsEW" class="obsHemi" type="button"></button>
+        </span>
+        <button id="obsGeo"></button>
+      </div>
+    </div>
+  </div>
+
   <div id="menu" class="hud" role="menu">
     <button id="menuLang" role="menuitem"></button>
     <button id="menuUnit" role="menuitem"></button>
@@ -700,18 +742,6 @@
     <div id="infoTabs">
       <button id="tabFacts" class="on"></button>
       <button id="tabObs"></button>
-    </div>
-    <div id="obsLoc" hidden>
-      <select id="obsCity" aria-label="都市"></select>
-      <span class="obsField">
-        <input id="obsLat" type="number" step="0.1" min="0" max="90" aria-label="緯度">
-        <button id="obsNS" class="obsHemi" type="button"></button>
-      </span>
-      <span class="obsField">
-        <input id="obsLon" type="number" step="0.1" min="0" max="180" aria-label="経度">
-        <button id="obsEW" class="obsHemi" type="button"></button>
-      </span>
-      <button id="obsGeo"></button>
     </div>
     <table><tbody id="infoRows"></tbody></table>
     <p class="fact" id="infoFact"></p>
@@ -2871,7 +2901,8 @@
     if (body.key === "earth") return { rows: "", fact: o.earth };
     const c = computeObs(body);
     const dir = o.dirs[Math.round(c.az/45) % 8];
-    const rows = [[o.az, c.az.toFixed(0) + "° (" + dir + ")"]];
+    const rows = [[o.loc, siteLabel()]];               // 観測地 (変更は地上ビューのチップから)
+    rows.push([o.az, c.az.toFixed(0) + "° (" + dir + ")"]);
     rows.push([o.alt, c.alt.toFixed(1) + "°" + (c.alt < 0 ? " (" + o.below + ")" : "")]);
     const rs = (t, other) => c.circ === 1 ? o.noSet : c.circ === -1 ? o.noRise : fmtHM(t);
     rows.push([o.rise, rs(c.rise)]);
@@ -2891,7 +2922,6 @@
   let infoTab = "facts", currentInfoBody = null, lastObsStr = "";
   const tabFactsBtn = document.getElementById("tabFacts");
   const tabObsBtn = document.getElementById("tabObs");
-  const obsLocEl = document.getElementById("obsLoc");
   const obsCity = document.getElementById("obsCity");
   const obsLatInput = document.getElementById("obsLat");
   const obsLonInput = document.getElementById("obsLon");
@@ -2925,22 +2955,12 @@
     tabObsBtn.classList.toggle("on", infoTab === "obs");
     const credEl = document.getElementById("infoCredit");
     if (infoTab === "obs") {
-      obsLocEl.hidden = false;
-      obsGeoBtn.textContent = t.obs.geo;
-      obsLatInput.value = Math.abs(obsLat).toFixed(2);
-      obsLonInput.value = Math.abs(obsLon).toFixed(2);
-      obsNSBtn.textContent = obsLat >= 0 ? t.obs.N : t.obs.S;
-      obsNSBtn.dataset.h = obsLat >= 0 ? "N" : "S";
-      obsEWBtn.textContent = obsLon >= 0 ? t.obs.E : t.obs.W;
-      obsEWBtn.dataset.h = obsLon >= 0 ? "E" : "W";
-      rebuildCitySelect();
       const r = obsContent(body);
       document.getElementById("infoRows").innerHTML = r.rows;
       document.getElementById("infoFact").textContent = r.fact;
       credEl.textContent = body.key === "earth" ? "" : t.obs.note;
       lastObsStr = r.rows;
     } else {
-      obsLocEl.hidden = true;
       const d = lang === "en" ? EN_DATA[body.key] : null;
       document.getElementById("infoRows").innerHTML =
         (d ? d.rows : body.rows).map(([kk, v]) => `<tr><td>${kk}</td><td>${v}</td></tr>`).join("");
@@ -2968,6 +2988,7 @@
     localStorage.setItem("ssLat", String(lat));
     localStorage.setItem("ssLon", String(lon));
     lastObsStr = "";
+    refreshObsSiteUI();
     if (infoTab === "obs" && currentInfoBody) renderInfoBody();
   }
   function applyObsInputs() {
@@ -2991,6 +3012,41 @@
       () => { obsGeoBtn.disabled = false; },
       { timeout: 8000, maximumAge: 600000 }
     );
+  });
+
+  // ---------- 観測地チップ (地上ビュー上部。タップでエディタをポップオーバー表示) ----------
+  const obsSiteWrap = document.getElementById("obsSiteWrap");
+  const obsSiteChip = document.getElementById("obsSiteChip");
+  const obsSitePop = document.getElementById("obsSitePop");
+  function siteLabel() {
+    const o = T().obs;
+    for (const c of CITIES) {
+      if (Math.abs(c.lat - obsLat) < 0.02 && Math.abs(c.lon - obsLon) < 0.02) return lang === "ja" ? c.ja : c.en;
+    }
+    return Math.abs(obsLat).toFixed(1) + "°" + (obsLat >= 0 ? o.N : o.S) + " " +
+           Math.abs(obsLon).toFixed(1) + "°" + (obsLon >= 0 ? o.E : o.W);
+  }
+  function refreshObsSiteUI() {
+    const t = T();
+    obsSiteChip.textContent = "📍 " + siteLabel();
+    obsSiteChip.title = t.obs.loc;
+    obsGeoBtn.textContent = t.obs.geo;
+    obsLatInput.value = Math.abs(obsLat).toFixed(2);
+    obsLonInput.value = Math.abs(obsLon).toFixed(2);
+    obsNSBtn.textContent = obsLat >= 0 ? t.obs.N : t.obs.S;
+    obsNSBtn.dataset.h = obsLat >= 0 ? "N" : "S";
+    obsEWBtn.textContent = obsLon >= 0 ? t.obs.E : t.obs.W;
+    obsEWBtn.dataset.h = obsLon >= 0 ? "E" : "W";
+    rebuildCitySelect();
+  }
+  function setSitePop(open) {
+    obsSitePop.hidden = !open;
+    obsSiteChip.setAttribute("aria-expanded", open ? "true" : "false");
+    if (open) refreshObsSiteUI();
+  }
+  obsSiteChip.addEventListener("click", (e) => { e.stopPropagation(); setSitePop(obsSitePop.hidden); });
+  document.addEventListener("pointerdown", (e) => {
+    if (!obsSitePop.hidden && !obsSiteWrap.contains(e.target)) setSitePop(false);
   });
   // ✕ はパネルを閉じるだけで、選択 (カメラ追尾) は維持する
   document.getElementById("closeInfo").addEventListener("click", () => {
@@ -3724,6 +3780,7 @@
     document.getElementById("gAltLabelTop").textContent = t.gAltLabel;
     ctrlCollapseBtn.title = t.ctrlHide;
     ctrlExpandBtn.title = t.ctrlShow;
+    refreshObsSiteUI();
     lastGAz = "";   // 方位テープの方角ラベルを言語に合わせて再描画
     document.getElementById("nowBtn").textContent = t.nowBtn;
     menuLangBtn.textContent = t.menuLang;
