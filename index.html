@@ -347,17 +347,27 @@
     font-size: 10.5px; color: var(--dim); font-family: var(--font-num); white-space: nowrap;
   }
   #gAltCell .step { padding: 2px 8px; font-size: 9px; line-height: 1.4; }
-  /* 縦持ちスマホのみ: パネルが全幅で7列目が入らないため、情報パネルの上・右側に
-     フロート配置 (#controls が transform を持つので fixed は使えず absolute で上方へ) */
-  @media (max-width: 720px) and (min-height: 481px) {
-    #app.groundMode #controls #gAltCell {
-      position: absolute; right: 8px; bottom: calc(100% + 190px);
-      margin-left: 0; border-left: none; padding: 10px 8px;
-      border-radius: 12px; background: rgba(16, 22, 42, 0.72);
-      border: 1px solid var(--line); backdrop-filter: blur(4px);
-    }
-    #gAltCell #gAlt { flex: none; height: 130px; }
+  /* ---- 操作パネルの折りたたみ (下へ引っ込む) ---- */
+  #controls { transition: transform 0.25s ease; }
+  #ctrlCollapse {
+    position: absolute; top: -23px; right: 14px;
+    padding: 1px 16px; font-size: 12px; line-height: 1.5;
+    color: var(--dim); background: rgba(16, 22, 42, 0.72);
+    border: 1px solid var(--line); border-bottom: none;
+    border-radius: 8px 8px 0 0; backdrop-filter: blur(4px);
   }
+  #ctrlCollapse:hover { color: var(--text); background: rgba(16, 22, 42, 0.9); }
+  #app.ctrlHidden #controls { transform: translate(-50%, calc(100% + 40px)); pointer-events: none; }
+  #ctrlExpand {
+    position: absolute; left: 50%; transform: translateX(-50%);
+    bottom: calc(6px + env(safe-area-inset-bottom, 0px));
+    z-index: 13; padding: 2px 20px; font-size: 12px; line-height: 1.5;
+    color: var(--dim); background: rgba(16, 22, 42, 0.72);
+    border: 1px solid var(--line); border-radius: 10px;
+    backdrop-filter: blur(4px); display: none;
+  }
+  #ctrlExpand:hover { color: var(--text); }
+  #app.ctrlHidden #ctrlExpand { display: block; }
 
   button {
     font-family: var(--font-ui);
@@ -379,6 +389,7 @@
   button.on { color: var(--accent); border-color: var(--accent-dim); }
 
   #play { min-width: 74px; white-space: nowrap; }
+  #playIcon { margin-right: 5px; }
 
   .slider {
     font-size: 11px;
@@ -571,12 +582,20 @@
     #nav { gap: 3px; }
     #nav button { padding: 4px 9px; font-size: 10px; }
     #controls {
-      gap: 6px;
+      /* 縮小適合幅だと min-width:0 の値列が 0 に潰れるため、全幅固定にする */
+      left: 8px; right: 8px; transform: none; max-width: none;
+      gap: 6px 4px;
       padding: 8px 10px;
-      grid-template-columns: auto auto auto minmax(70px, 1fr) auto auto;
+      grid-template-columns: auto auto auto minmax(50px, 1fr) auto auto;
     }
+    #app.ctrlHidden #controls { transform: translateY(calc(100% + 40px)); }
     button { padding: 6px 9px; font-size: 11px; }
-    #play { min-width: 64px; }
+    /* 再生/停止は記号のみ + 値表示を圧縮して、高度カラム (7列目) を収める */
+    #play { min-width: 0; }
+    #playLabel { display: none; }
+    #playIcon { margin-right: 0; }
+    #speedVal, #zoomVal, #angleVal, #gFovVal, #gAzDir { min-width: 0; font-size: 10px; }
+    #app.groundMode #controls #gAltCell { margin-left: 2px; padding-left: 8px; }
   }
 
   /* ---- 横向きスマホ / 高さの低い画面 (Landscape) ---- */
@@ -607,7 +626,12 @@
       grid-template-columns: auto auto auto minmax(70px, 130px) auto auto;
     }
     #controls button { padding: 3px 8px; font-size: 10.5px; }
-    #play { min-width: 56px; }
+    #play { min-width: 0; }
+    #playLabel { display: none; }
+    #playIcon { margin-right: 0; }
+    /* 横持ちはパネルが左寄せ (transform なし) のため、隠すときは縦方向のみ */
+    #app.ctrlHidden #controls { transform: translateY(calc(100% + 40px)); }
+    #ctrlExpand { left: 8px; transform: none; }
     /* 情報パネルは右側に縦利用 (時計の下から)。100dvh で実際の可視領域に収める */
     #info {
       top: 58px;
@@ -697,7 +721,8 @@
   <div id="hint">ドラッグで回転 ・ ホイール / ピンチでズーム ・ 天体クリックで接近</div>
 
   <footer id="controls" class="hud">
-    <button id="play" class="primary">⏸ 停止</button>
+    <button id="ctrlCollapse" aria-label="操作パネルを隠す">⌄</button>
+    <button id="play" class="primary"><span id="playIcon">⏸</span><span id="playLabel">停止</span></button>
     <label class="slider" id="speedLabel" for="speed">速度</label>
     <button id="speedDown" class="step" aria-label="遅くする">−</button>
     <input type="range" id="speed" min="0" max="100" value="0" aria-label="時間の速さ">
@@ -749,6 +774,8 @@
       <span id="gAltVal"></span>
     </div>
   </footer>
+
+  <button id="ctrlExpand" aria-label="操作パネルを表示">⌃</button>
 </div>
 
 <script>
@@ -922,7 +949,8 @@
   const UI = {
     ja: {
       title: "Galaxeum — バーチャル宇宙博物館",
-      pause: "⏸ 停止", play: "▶ 再生", speed: "速度", zoom: "ズーム", angle: "角度",
+      pause: "停止", play: "再生", speed: "速度", zoom: "ズーム", angle: "角度",
+      ctrlHide: "操作パネルを隠す", ctrlShow: "操作パネルを表示",
       orbits: "軌道", labels: "名前", reset: "全体表示",
       nowBtn: "現在時刻に合わせる", paused: "SIMULATION PAUSED", ratePrefix: "1秒 = ",
       viewTop: "真上", viewDef: "デフォルト", viewSide: "真横", camera: "カメラ",
@@ -955,7 +983,8 @@
     },
     en: {
       title: "Galaxeum — Virtual Space Museum",
-      pause: "⏸ Pause", play: "▶ Play", speed: "Speed", zoom: "Zoom", angle: "Angle",
+      pause: "Pause", play: "Play", speed: "Speed", zoom: "Zoom", angle: "Angle",
+      ctrlHide: "Hide controls", ctrlShow: "Show controls",
       orbits: "Orbits", labels: "Labels", reset: "Overview",
       nowBtn: "Set to current time", paused: "SIMULATION PAUSED", ratePrefix: "1s = ",
       viewTop: "Top", viewDef: "Default", viewSide: "Side", camera: "Camera",
@@ -2738,6 +2767,10 @@
   // モバイル: 情報パネルを操作パネルのすぐ上に配置 (実高さを測って追従)
   function positionInfoPanel() {
     if (window.matchMedia("(max-width: 720px)").matches) {
+      if (document.getElementById("app").classList.contains("ctrlHidden")) {
+        infoPanel.style.bottom = "12px";   // パネル格納中は画面下端まで使う
+        return;
+      }
       const top = document.getElementById("controls").getBoundingClientRect().top;
       infoPanel.style.bottom = Math.round(window.innerHeight - top + 8) + "px";
     } else {
@@ -2745,6 +2778,17 @@
     }
   }
   window.addEventListener("resize", positionInfoPanel);
+
+  // 操作パネルの折りたたみ (⌄ で画面下へ格納、⌃ で復帰)
+  const ctrlCollapseBtn = document.getElementById("ctrlCollapse");
+  const ctrlExpandBtn = document.getElementById("ctrlExpand");
+  function setCtrlVisible(v) {
+    document.getElementById("app").classList.toggle("ctrlHidden", !v);
+    positionInfoPanel();
+    setTimeout(positionInfoPanel, 300);   // スライドアニメーション後に再計測
+  }
+  ctrlCollapseBtn.addEventListener("click", () => setCtrlVisible(false));
+  ctrlExpandBtn.addEventListener("click", () => setCtrlVisible(true));
 
   // ---------- 地球からの観測モード (クライアント計算, 近似) ----------
   const ECL = 23.4393 * DEG, RS_RATE = 15.041;   // 黄道傾斜, 時角の進み (度/時)
@@ -3196,9 +3240,12 @@
   const speedInput = document.getElementById("speed");
   const speedVal = document.getElementById("speedVal");
 
+  const playIconEl = document.getElementById("playIcon");
+  const playLabelEl = document.getElementById("playLabel");
   function setPlaying(v) {
     playing = v;
-    playBtn.textContent = v ? T().pause : T().play;
+    playIconEl.textContent = v ? "⏸" : "▶";
+    playLabelEl.textContent = v ? T().pause : T().play;
   }
   playBtn.addEventListener("click", () => setPlaying(!playing));
 
@@ -3675,6 +3722,8 @@
     document.getElementById("gFovLabel").textContent = t.gFovLabel;
     document.getElementById("gAzLabel").textContent = t.gAzLabel;
     document.getElementById("gAltLabelTop").textContent = t.gAltLabel;
+    ctrlCollapseBtn.title = t.ctrlHide;
+    ctrlExpandBtn.title = t.ctrlShow;
     lastGAz = "";   // 方位テープの方角ラベルを言語に合わせて再描画
     document.getElementById("nowBtn").textContent = t.nowBtn;
     menuLangBtn.textContent = t.menuLang;
