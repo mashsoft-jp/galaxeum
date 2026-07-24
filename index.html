@@ -307,7 +307,7 @@
   #gFovVal { min-width: 88px; text-align: left; }
   /* 方位 (操作パネル内: ◀ 目盛りテープ ▶ + 方角表示) */
   #gAzDir { min-width: 88px; text-align: left; color: var(--dim); }
-  #gAzTape { width: 100%; height: 32px; }   /* display は .groundOnly の出し分けに任せる */
+  #gAzTape { width: 100%; height: 32px; touch-action: none; cursor: ew-resize; }   /* display は .groundOnly の出し分けに任せる */
   #gAzTape .tapetxt { fill: var(--dim); font-size: 10px; font-family: var(--font-ui); text-anchor: middle; }
   #gAzTape .tapen { fill: #e8785f; }
   /* 宇宙/地上のビュー切替 (画面上部中央) */
@@ -3354,6 +3354,23 @@
   bindHold(document.getElementById("gFovIn"), () => stepFov(-1));    // ＋ = 狭める (ズームイン)
   bindHold(document.getElementById("gAzLeft"), () => { gTrack = false; gAzTgt -= gFov * 0.4; });
   bindHold(document.getElementById("gAzRight"), () => { gTrack = false; gAzTgt += gFov * 0.4; });
+  // 目盛りテープのドラッグ/スワイプでも方位を回せる (テープが指に追従する向き)
+  let tapeDragX = null;
+  gAzTape.addEventListener("pointerdown", (e) => {
+    tapeDragX = e.clientX;
+    gAzTape.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+  gAzTape.addEventListener("pointermove", (e) => {
+    if (tapeDragX === null) return;
+    const w = gAzTape.getBoundingClientRect().width || 1;
+    gTrack = false;
+    gAz -= (e.clientX - tapeDragX) * (100 / w) * DEG;   // テープの表示範囲は ±50°
+    gAzTgt = gAz;
+    tapeDragX = e.clientX;
+  });
+  gAzTape.addEventListener("pointerup", () => { tapeDragX = null; });
+  gAzTape.addEventListener("pointercancel", () => { tapeDragX = null; });
   const stepAlt = (dir) => {
     gTrack = false;
     gAltTgt = Math.max(-1.4, Math.min(1.4, gAltTgt + dir * gFov * 0.4));
