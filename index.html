@@ -685,6 +685,23 @@
     }
     #info.open { transform: none; }
   }
+
+  /* ---- PWA (standalone) 専用の下部補正 ----
+     iOS の black-translucent ではレイアウトビューポートの下端がステータス
+     バー高さ (--sat) ぶん画面下端より上に来るため、下部固定 UI を下げる。
+     通常ブラウザでは display-mode が standalone にならないため影響しない */
+  @media (display-mode: standalone) {
+    #controls { bottom: calc(18px + env(safe-area-inset-bottom, 0px) - var(--sat)); }
+    #ctrlExpand { bottom: calc(6px + env(safe-area-inset-bottom, 0px) - var(--sat)); }
+    #app.ctrlHidden #controls { transform: translate(-50%, calc(100% + 40px + var(--sat))); }
+  }
+  @media (display-mode: standalone) and (max-width: 720px) {
+    #app.ctrlHidden #controls { transform: translateY(calc(100% + 40px + var(--sat))); }
+  }
+  @media (display-mode: standalone) and (max-height: 480px) {
+    #controls { bottom: calc(8px + env(safe-area-inset-bottom, 0px) - var(--sat)); }
+    #app.ctrlHidden #controls { transform: translateY(calc(100% + 40px + var(--sat))); }
+  }
 </style>
 
 <div id="app">
