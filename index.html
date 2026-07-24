@@ -346,6 +346,7 @@
   #gAltLabelTop, #gAltVal {
     font-size: 10.5px; color: var(--dim); font-family: var(--font-num); white-space: nowrap;
   }
+  #gAltCell .step { padding: 2px 8px; font-size: 9px; line-height: 1.4; }
   /* 縦持ちスマホのみ: パネルが全幅で7列目が入らないため、情報パネルの上・右側に
      フロート配置 (#controls が transform を持つので fixed は使えず absolute で上方へ) */
   @media (max-width: 720px) and (min-height: 481px) {
@@ -742,7 +743,9 @@
 
     <div id="gAltCell" class="groundOnly">
       <span id="gAltLabelTop">高度</span>
+      <button id="gAltUp" class="step" aria-label="上を向く">▲</button>
       <input type="range" id="gAlt" min="-80" max="90" value="30" aria-label="高度">
+      <button id="gAltDown" class="step" aria-label="下を向く">▼</button>
       <span id="gAltVal"></span>
     </div>
   </footer>
@@ -3340,6 +3343,12 @@
   bindHold(document.getElementById("gFovIn"), () => stepFov(-1));    // ＋ = 狭める (ズームイン)
   bindHold(document.getElementById("gAzLeft"), () => { gTrack = false; gAzTgt -= gFov * 0.4; });
   bindHold(document.getElementById("gAzRight"), () => { gTrack = false; gAzTgt += gFov * 0.4; });
+  const stepAlt = (dir) => {
+    gTrack = false;
+    gAltTgt = Math.max(-1.4, Math.min(1.4, gAltTgt + dir * gFov * 0.4));
+  };
+  bindHold(document.getElementById("gAltUp"), () => stepAlt(1));
+  bindHold(document.getElementById("gAltDown"), () => stepAlt(-1));
   function updateGroundUI() {
     if (!groundView) return;
     if (!gFovActive) {
