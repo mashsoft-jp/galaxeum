@@ -1968,7 +1968,10 @@
     const ca = Math.cos(gAlt);
     _fwd[0] = ca*Math.sin(gAz); _fwd[1] = Math.sin(gAlt); _fwd[2] = -ca*Math.cos(gAz);
     mLookAt(ZERO3, _fwd, UP3, gV64);
-    mPersp(gFov, W / H, 0.05, 2000, gP64);
+    // ズーム時は near を引き上げて深度分解能を確保する (天体球と環の相互隠蔽に必要。
+    // near 0.05 のままだと距離100での深度精度 ~0.012 が球の奥行きを超えてしまう)
+    const gNear = Math.min(50, Math.max(0.05, 0.05 * (60 * DEG) / gFov));
+    mPersp(gFov, W / H, gNear, 2000, gP64);
     mMul(gP64, gV64, gVP);
     gVP32.set(gVP);
 
